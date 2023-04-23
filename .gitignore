@@ -1,0 +1,7 @@
+# 忽略中间文件
+build
+CMakeFiles
+# 忽略部分测试文件
+tests/log.txt
+.vscode
+
