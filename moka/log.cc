@@ -269,7 +269,7 @@ void LogFormatter::init() {
 
 LoggerManager::LoggerManager() {
   root_.reset(new Logger);  // 初始化根日志指针
-  root_->addAppender(LogAppender::ptr(new StdoutLogAppender));
+  root_->addAppender(LogAppender::ptr(new StdoutLogAppender));  // 根日志默认以控制台作为appender
 }
 
 Logger::ptr LoggerManager::get_logger(const std::string &name) {

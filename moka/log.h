@@ -40,6 +40,8 @@
 #define MOKA_LOG_FMT_ERROR(logger, fmt, ...) MOKA_LOG_FMT_LEVEL(logger, moka::LogLevel::ERROR, fmt, __VA_ARGS__)
 #define MOKA_LOG_FMT_FATAL(logger, fmt, ...) MOKA_LOG_FMT_LEVEL(logger, moka::LogLevel::FATAL, fmt, __VA_ARGS__)
 
+#define MOKA_LOG_ROOT() moka::LoggerMgr::get_instance()->get_root()
+
 namespace moka {
 
 
@@ -192,14 +194,16 @@ class LoggerManager {
  public:
   LoggerManager();
   Logger::ptr get_logger(const std::string& name);
+  Logger::ptr get_root() const { return root_; }
 
  private:
+  // TODO:
   // void init();
   std::unordered_map<std::string, Logger::ptr> loggers_;  // 日志集合
   Logger::ptr root_;  // 根日志
 };
 
-typedef moka::Singleton<LoggerManager> LoggerMgr;
+using LoggerMgr = moka::Singleton<LoggerManager>;
 
 class MessageFormatItem : public LogFormatter::FormatterItem {
  public:
