@@ -17,3 +17,41 @@ logs:
 system:
     port: 9900
     value: 15
+    int_vec:
+        - 1
+        - 1
+    int_list: [10, 10]
+    int_set: [100, 100, 1]
+    int_uset: [3, 4, 1, 1]
+    str_int_map:
+        "1": 30
+        "3": 20
+        "2": 10
+    str_int_umap:
+        k: 130
+        k2: 120
+        k3: 110
+      
+class:
+    person:
+      name: moka
+      age: 22
+      sex: true
+    map: 
+        moka01:
+          name: moka01
+          age: 18
+          sex: false
+        moka02:
+          name: moka02
+          age: 19
+          sex: true
+    vec_map:
+        moka_list:
+            - name: moka01
+              age: 21
+              sex: true
+            - name: moka02
+              age: 20
+              sex: true
+      

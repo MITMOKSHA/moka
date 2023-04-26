@@ -7,32 +7,174 @@ moka::ConfigVar<int>::ptr g_int_value_config =
 moka::ConfigVar<float>::ptr g_float_value_config = 
   moka::Config::lookup("system.value", (float)10.2f, "system port2");
 
+// 错误类型转换测试
+// datas_中已经有"system.port"到int的映射，但此lookup查找"system.port"，找到后类型转换会出错
+// dynamic_pointer_cast返回nullptr
+moka::ConfigVar<float>::ptr g_float_valuex_config = 
+  moka::Config::lookup("system.port", (float)8080, "system port2");
+
+moka::ConfigVar<std::vector<int>>::ptr g_int_vec_value_config = 
+  moka::Config::lookup("system.int_vec", std::vector<int>{1,2}, "system int vec");
+
+moka::ConfigVar<std::list<int>>::ptr g_int_list_value_config = 
+  moka::Config::lookup("system.int_list", std::list<int>{10,20}, "system int list");
+
+moka::ConfigVar<std::set<int>>::ptr g_int_set_value_config = 
+  moka::Config::lookup("system.int_set", std::set<int>{20,10}, "system int set");
+  
+moka::ConfigVar<std::unordered_set<int>>::ptr g_int_uset_value_config = 
+  moka::Config::lookup("system.int_uset", std::unordered_set<int>{10,20}, "system int u_set");
+  
+moka::ConfigVar<std::map<std::string, int>>::ptr g_str_int_map_value_config = 
+  moka::Config::lookup("system.str_int_map", std::map<std::string, int>{{"3",20}}, "system str int map");
+
+moka::ConfigVar<std::unordered_map<std::string, int>>::ptr g_str_int_umap_value_config = 
+  moka::Config::lookup("system.str_int_umap", std::unordered_map<std::string, int>{{"k",20}}, "system str int umap");
+
+// 线性容器测试宏，toString()将其转换为字符串输出
+#define XX(g_var, name, prefix) \
+  { \
+    auto vals = g_var->get_value(); \
+    for (auto val : vals) { \
+      MOKA_LOG_INFO(MOKA_LOG_ROOT()) << #prefix " " #name << ": " << val; \
+    } \
+    MOKA_LOG_INFO(MOKA_LOG_ROOT()) << #prefix " " #name " yaml: " << g_var->toString(); \
+  }
+
+// MAP容器测试宏
+#define XX_M(g_var, name, prefix) \
+{ \
+  auto vals = g_var->get_value(); \
+  for (auto val : vals) { \
+    MOKA_LOG_INFO(MOKA_LOG_ROOT()) << #prefix " " #name << ": {" << val.first << \
+      ", " << val.second << "}"; \
+  } \
+  MOKA_LOG_INFO(MOKA_LOG_ROOT()) << #prefix " " #name " yaml: " << g_var->toString(); \
+}
+
 // 解析yaml
 void parser_yaml(const YAML::Node& node, int level) {
   if (node.IsScalar()) {
     // 标量类型
-    MOKA_LOG_INFO(MOKA_LOG_ROOT()) << std::string(level*4, ' ') << node.Scalar() << " - " << node.Type() <<
-      " - " << level;
+    MOKA_LOG_INFO(MOKA_LOG_ROOT()) << std::string(level*4, ' ') << node.Scalar() << " - " << node.Type()
+                                   << " - " << level;
   } else if (node.IsNull()) {
     // 空类型
     MOKA_LOG_INFO(MOKA_LOG_ROOT()) << std::string(level*4, ' ') << "NULL - " << node.Type() << " - " << level;
   } else if (node.IsMap()) {
     // 字典类型
     for (auto it = node.begin(); it != node.end(); ++it) {
-      MOKA_LOG_INFO(MOKA_LOG_ROOT()) << std::string(level*4, ' ') << it->first << " - " << it->second.Type() <<
-      " - " << level;
+      MOKA_LOG_INFO(MOKA_LOG_ROOT()) << std::string(level*4, ' ') << it->first << " - " << it->second.Type()
+                                     << " - " << level;
       parser_yaml(it->second, level+1);
     }
   } else if (node.IsSequence()) {
     // 数组类型
     for (size_t i = 0; i < node.size(); ++i) {
-      MOKA_LOG_INFO(MOKA_LOG_ROOT()) << std::string(level*4, ' ') << i << " - " << node[i].Type() <<
-      " - " << level;
+      MOKA_LOG_INFO(MOKA_LOG_ROOT()) << std::string(level*4, ' ') << i << " - " << node[i].Type()
+                                     << " - " << level;
       parser_yaml(node[i], level+1);
     }
   }
 }
 
+class Person {
+ public:
+  std::string toString() const {
+    std::stringstream ss;
+    ss << "{Person name=" << name_
+      << " age=" << age_
+      << " sex=" << sex_
+      << "}";
+    return ss.str();
+  }
+  std::string name_;
+  int age_ = 0;
+  bool sex_ = 0;
+};
+
+namespace moka {
+
+// 复杂类型测试宏
+#define XX_CM(g_var, name, prefix) \
+  { \
+    auto m = g_var->get_value(); \
+    for (auto i : m) { \
+      MOKA_LOG_INFO(MOKA_LOG_ROOT()) << #prefix " " #name << ": " << i.first << " - " \
+                                     << i.second.toString(); \
+    } \
+    MOKA_LOG_INFO(MOKA_LOG_ROOT()) << #prefix " " #name << ": size=" << m.size(); \
+  }
+
+#define XX_CM_VEC(g_var, name, prefix) \
+  { \
+    auto m = g_var->get_value(); \
+    for (auto i : m) { \
+      std::stringstream s; \
+      for (auto v : i.second) { \
+        s << v.toString() << " "; \
+      } \
+      MOKA_LOG_INFO(MOKA_LOG_ROOT()) << #prefix " " #name << ": " << i.first << " - " << s.str(); \
+    } \
+    MOKA_LOG_INFO(MOKA_LOG_ROOT()) << #prefix " " #name << ": size=" << m.size(); \
+  }
+
+template<>
+class LexicalCast<std::string, Person> {
+ public:
+  Person operator()(const std::string& v) {
+    YAML::Node node = YAML::Load(v);  
+    Person p;      
+    p.name_ = node["name"].as<std::string>();
+    p.age_ = node["age"].as<int>();
+    p.sex_ = node["sex"].as<bool>();
+    return p;
+  }
+};
+
+template<>
+class LexicalCast<Person, std::string> {
+ public:
+  std::string operator()(const Person& p) {
+    YAML::Node node;
+    node["name"] = p.name_;
+    node["age"] = p.age_;
+    node["sex"] = p.sex_;
+    std::stringstream ss;
+    ss << node;
+    return ss.str();
+  }
+};
+
+}
+
+moka::ConfigVar<Person>::ptr g_person = 
+  moka::Config::lookup("class.person", Person(), "system person");
+  
+moka::ConfigVar<std::map<std::string, Person>>::ptr g_person_map = 
+  moka::Config::lookup("class.map", std::map<std::string, Person>(), "system person map");
+
+moka::ConfigVar<std::map<std::string, std::vector<Person>>>::ptr g_person_vec_map = 
+  moka::Config::lookup("class.vec_map", std::map<std::string, std::vector<Person>>(), "system person vec_map");
+
+// 测试自定义类
+void test_class() {
+  MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person->get_name() <<" before " << g_person->get_value().toString() << "-" << g_person->toString();
+  XX_CM(g_person_map, map, before);
+  XX_CM_VEC(g_person_vec_map, vec_map, before);
+  // MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person_vec_map->get_name() <<" before " << g_person_vec_map->toString();
+
+  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/log.yml");  // 加载yaml文件
+  moka::Config::loadFromYaml(root);
+
+  MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person->get_name() << " after " << g_person->get_value().toString() << "-" << g_person->toString();
+  XX_CM(g_person_map, map, after);
+  XX_CM_VEC(g_person_vec_map, vec_map, after);
+  // MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person_vec_map->get_name() <<" after " << g_person_vec_map->toString();
+
+}
+
+// 测试yaml的解析读取
 void test_yaml() {
   YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/log.yml");  // 加载yaml文件
   parser_yaml(root, 0);  // 解析yaml文件
@@ -44,16 +186,32 @@ void test_config() {
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "before:" << g_int_value_config->get_value();
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "before:" << g_float_value_config->toString();
 
+  XX(g_int_vec_value_config, int_vec, before);    // 支持vector类型
+  XX(g_int_list_value_config, int_list, before);  // 支持list类型
+  XX(g_int_set_value_config, int_set, before);
+  XX(g_int_uset_value_config, int_uset, before);
+  XX_M(g_str_int_map_value_config, str_int_map, before);
+  XX_M(g_str_int_umap_value_config, str_int_umap, before);
+
+
   // 从yaml文件中加载配置项参数值到现有的配置项中(即在集合中的配置项)
   YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/log.yml");
   moka::Config::loadFromYaml(root);
 
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "after:" << g_int_value_config->get_value();
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "after:" << g_float_value_config->toString();
+
+  XX(g_int_vec_value_config, int_vec, after);
+  XX(g_int_list_value_config, int_list, after);
+  XX(g_int_set_value_config, int_set, after);
+  XX(g_int_uset_value_config, int_uset, after);
+  XX_M(g_str_int_map_value_config, str_int_map, after);
+  XX_M(g_str_int_umap_value_config, str_int_umap, after);
 }
 
 int main(int agrc, char** argv) {
   // test_yaml();
-  test_config();
+  // test_config();
+  test_class();
   return 0;
 }

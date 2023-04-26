@@ -6,9 +6,215 @@
 #include <sstream>
 #include <boost/lexical_cast.hpp>
 #include <yaml-cpp/yaml.h>
+#include <vector>
+#include <list>
+#include <map>
+#include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include "log.h"
 
 namespace moka {
+
+// F from_type, T to_type
+// 仿函数类
+template<class F, class T>
+class LexicalCast {
+ public:
+  T operator()(const F& v) {
+    return boost::lexical_cast<T>(v);
+  }
+};
+
+// LexicalCast模板类的偏特化
+// vector
+template<class T>
+class LexicalCast<std::string, std::vector<T>> {
+ public:
+  std::vector<T> operator()(const std::string& v) {
+    YAML::Node node = YAML::Load(v);  // 将string类型转为yaml
+    typename std::vector<T> res;      // typename告诉编译器std::vector<T>为类型名而不是成员变量/函数名
+    std::stringstream ss;
+    for (size_t i = 0; i < node.size(); ++i) {
+      ss.str("");  // 设置一个新的string buffer
+      ss << node[i];
+      // 将字符串都转换成类型T加入T类型数组中
+      res.push_back(LexicalCast<std::string, T>()(ss.str()));
+    }
+    return res;
+  }
+};
+
+template<class T>
+class LexicalCast<std::vector<T>, std::string> {
+ public:
+  std::string operator()(const std::vector<T>& v) {
+    // 将vector转换为YAML类型，再输出为字符串
+    YAML::Node node;
+    for (auto i : v) {
+      // 用到基本类型的转换
+      node.push_back(YAML::Load(LexicalCast<T, std::string>()(i)));
+    }
+    std::stringstream ss;
+    ss << node;     // 输出yaml类型字符串("- ")
+    return ss.str();
+  }
+};
+
+// list
+template<class T>
+class LexicalCast<std::string, std::list<T>> {
+ public:
+  std::list<T> operator()(const std::string& v) {
+    YAML::Node node = YAML::Load(v);  
+    typename std::list<T> res;      
+    std::stringstream ss;
+    for (size_t i = 0; i < node.size(); ++i) {
+      ss.str("");  
+      ss << node[i];
+      res.push_back(LexicalCast<std::string, T>()(ss.str()));
+    }
+    return res;
+  }
+};
+
+template<class T>
+class LexicalCast<std::list<T>, std::string> {
+ public:
+  std::string operator()(const std::list<T>& v) {
+    YAML::Node node;
+    for (auto i : v) {
+      node.push_back(YAML::Load(LexicalCast<T, std::string>()(i)));
+    }
+    std::stringstream ss;
+    ss << node;
+    return ss.str();
+  }
+};
+
+// set
+template<class T>
+class LexicalCast<std::string, std::set<T>> {
+ public:
+  std::set<T> operator()(const std::string& v) {
+    YAML::Node node = YAML::Load(v);  
+    typename std::set<T> res;      
+    std::stringstream ss;
+    for (size_t i = 0; i < node.size(); ++i) {
+      ss.str("");  
+      ss << node[i];
+      res.insert(LexicalCast<std::string, T>()(ss.str()));
+    }
+    return res;
+  }
+};
+
+template<class T>
+class LexicalCast<std::set<T>, std::string> {
+ public:
+  std::string operator()(const std::set<T>& v) {
+    YAML::Node node;
+    for (auto i : v) {
+      node.push_back(YAML::Load(LexicalCast<T, std::string>()(i)));
+    }
+    std::stringstream ss;
+    ss << node;
+    return ss.str();
+  }
+};
+
+// unordered_set
+template<class T>
+class LexicalCast<std::string, std::unordered_set<T>> {
+ public:
+  std::unordered_set<T> operator()(const std::string& v) {
+    YAML::Node node = YAML::Load(v);  
+    typename std::unordered_set<T> res;      
+    std::stringstream ss;
+    for (size_t i = 0; i < node.size(); ++i) {
+      ss.str("");  
+      ss << node[i];
+      res.insert(LexicalCast<std::string, T>()(ss.str()));
+    }
+    return res;
+  }
+};
+
+template<class T>
+class LexicalCast<std::unordered_set<T>, std::string> {
+ public:
+  std::string operator()(const std::unordered_set<T>& v) {
+    YAML::Node node;
+    for (auto i : v) {
+      node.push_back(YAML::Load(LexicalCast<T, std::string>()(i)));
+    }
+    std::stringstream ss;
+    ss << node;
+    return ss.str();
+  }
+};
+
+// map
+template<class T>
+class LexicalCast<std::string, std::map<std::string, T>> {
+ public:
+  std::map<std::string, T> operator()(const std::string& v) {
+    YAML::Node node = YAML::Load(v);  
+    typename std::map<std::string, T> res;      
+    std::stringstream ss;
+    for (auto it : node) {
+      ss.str("");  
+      ss << it.second;
+      res.insert(std::make_pair(it.first.Scalar(), LexicalCast<std::string, T>()(ss.str())));
+    }
+    return res;
+  }
+};
+
+template<class T>
+class LexicalCast<std::map<std::string, T>, std::string> {
+ public:
+  std::string operator()(const std::map<std::string, T>& v) {
+    YAML::Node node;
+    for (auto i : v) {
+      node[i.first] = YAML::Load(LexicalCast<T, std::string>()(i.second));
+    }
+    std::stringstream ss;
+    ss << node;
+    return ss.str();
+  }
+};
+
+// unordered_map
+template<class T>
+class LexicalCast<std::string, std::unordered_map<std::string, T>> {
+ public:
+  std::unordered_map<std::string, T> operator()(const std::string& v) {
+    YAML::Node node = YAML::Load(v);  
+    typename std::unordered_map<std::string, T> res;      
+    std::stringstream ss;
+    for (auto it : node) {
+      ss.str("");  
+      ss << it.second;
+      res.insert(std::make_pair(it.first.Scalar(), LexicalCast<std::string, T>()(ss.str())));
+    }
+    return res;
+  }
+};
+
+template<class T>
+class LexicalCast<std::unordered_map<std::string, T>, std::string> {
+ public:
+  std::string operator()(const std::unordered_map<std::string, T>& v) {
+    YAML::Node node;
+    for (auto i : v) {
+      node[i.first] = YAML::Load(LexicalCast<T, std::string>()(i.second));
+    }
+    std::stringstream ss;
+    ss << node;
+    return ss.str();
+  }
+};
 
 // 配置项基类
 class ConfigVarBase {
@@ -25,14 +231,19 @@ class ConfigVarBase {
 
   virtual std::string toString() = 0;
   virtual bool fromString(const std::string& val) = 0;   // 解析字符串
+  virtual const std::string get_typename() const = 0;
 
  private:
   std::string name_;
   std::string description_;
 };
 
+
 // 具体配置项类
-template<class T>
+//FromStr T opeator()(const std::string&)
+//ToStr std::string operator()(const T&)
+template<class T, class FromStr = LexicalCast<std::string, T>,
+                  class ToStr = LexicalCast<T, std::string> >
 class ConfigVar : public ConfigVarBase {
  public:
   using ptr = std::shared_ptr<ConfigVar>;
@@ -41,10 +252,12 @@ class ConfigVar : public ConfigVarBase {
       // 子类显示调用直接父类的构造函数
   }
 
+  // 在toString和fromString操纵的都是val_属性
   // 将val_转换为字符串类型
   virtual std::string toString() override;
   // 将字符串类型转换为T
   virtual bool fromString(const std::string& val) override;
+  virtual const std::string get_typename() const override { return typeid(T).name(); }
 
   const T get_value() const { return val_; }
   void set_value(const T& val) { val_ = val; }
@@ -65,47 +278,62 @@ class Config {
 
   static void loadFromYaml(const YAML::Node& root);                  // 从yaml文件中加载配置参数信息
   static ConfigVarBase::ptr lookupBase(const std::string& name);     // 查找集合是否有当前配置名对应的配置项
- private:
-  template<class T>
-  static typename ConfigVar<T>::ptr lookup(const std::string& name);
 
+ private:
   static ConfigVarMap datas_;  // 对象间共享，目前系统运行包含的配置项，存储配置名到具体配置项的映射集合
 };
 
-template<class T>
-std::string ConfigVar<T>::toString() {
+
+
+template<class T, class FromStr, class ToStr>
+std::string ConfigVar<T, FromStr, ToStr>::toString() {
   try {
-    return std::to_string(val_);
+    // return std::to_string(val_);
+    // 调用仿函数
+    return ToStr()(val_);
   } catch (std::exception& e) {
     // 异常则输出log
-    MOKA_LOG_ERROR(MOKA_LOG_ROOT()) << "ConfigVar::toString exception" <<
-      e.what() << " convert: " << typeid(val_).name() << " to string";  // typeid.name()可以输出具体的类型名称
+    MOKA_LOG_ERROR(MOKA_LOG_ROOT()) << "ConfigVar::toString exception"
+                                    << e.what() << " convert: "
+                                    << typeid(val_).name() << " to string";  // typeid.name()可以输出具体的类型名称
   }
   return "";
 } 
 
-template<class T>
-bool ConfigVar<T>::fromString(const std::string& val) {
+template<class T, class FromStr, class ToStr>
+bool ConfigVar<T, FromStr, ToStr>::fromString(const std::string& val) {
   try {
-    // c_str转换为const_char*
-    val_ = boost::lexical_cast<T>(val);
+    set_value(FromStr()(val));
     return true;
   } catch (std::exception& e) {
-    MOKA_LOG_ERROR(MOKA_LOG_ROOT()) << "ConfigVar::toString exception" <<
-      e.what() << " convert: string to" << typeid(val_).name();
+    MOKA_LOG_ERROR(MOKA_LOG_ROOT()) << "ConfigVar::toString exception"
+                                    << e.what() << " convert: string to"
+                                    << typeid(val_).name();
   }
   return false;
 }
 
-
 template<class T>
 typename ConfigVar<T>::ptr Config::lookup(const std::string& name,
     const T& default_val, const std::string& description) {
-  auto tmp = lookup<T>(name);  // 查找配置名对应的配置项是否在集合中
-  if (tmp) {
+  // auto tmp = lookup<T>(name);  // 查找配置名对应的配置项是否在集合中
+  auto it = datas_.find(name);
+  if (it != datas_.end()) {
     // 存在
-    MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "Lookup name=" << name << " exists";
-    return tmp;
+    auto tmp = std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
+    if (tmp) {
+      // 强转成功
+      MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "Lookup name=" << name << " exists";
+      return tmp;
+    } else {
+      // 强转失败(同名key对应的值类型不同则会强转失败)
+      MOKA_LOG_ERROR(MOKA_LOG_ROOT()) << "lookup name=" << name
+                                      << "exist but type not " 
+                                      << typeid(T).name() << " real type is " 
+                                      << it->second->get_typename() << " "
+                                      << it->second->toString();
+      return nullptr;
+    }
   }
   if (name.find_first_not_of("abcdefghijklmnopqrstuvwxyz._0123456789") !=
       std::string::npos) {
@@ -118,15 +346,6 @@ typename ConfigVar<T>::ptr Config::lookup(const std::string& name,
   typename ConfigVar<T>::ptr v(new ConfigVar<T>(name, default_val, description));
   datas_[name] = v;  // 以数组的方式插入哈希表中
   return v;
-}
-
-template<class T>
-typename ConfigVar<T>::ptr Config::lookup(const std::string& name) {
-  auto it = datas_.find(name);
-  if (it == datas_.end()) {
-    return nullptr;
-  }
-  return std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
 }
 
 }

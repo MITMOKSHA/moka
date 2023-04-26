@@ -37,12 +37,16 @@ void Config::loadFromYaml(const YAML::Node& root) {
     }
 
     std::transform(key.begin(), key.end(), key.begin(), ::tolower);  // 大小写不敏感
-    ConfigVarBase::ptr var = lookupBase(key);  // 在配置名和配置项的映射中查找key名称对应的配置项
+    // 约定优于配置，即便配置件里有相应的配置项，也不会去解析，只有找到约定的内容才会进行覆盖/更新
+    ConfigVarBase::ptr var = lookupBase(key);  // 在配置名和配置项的映射中查找key名称对应的配置项，返回指针
+    
+    // 若找到，则对configvarbase对应的配置项的值进行覆盖
     if (var) {
       // 若找到，则具体配置项的参数(val属性)改变为yml文件中配置项的参数
       if (i.second.IsScalar()) {
         var->fromString(i.second.Scalar());
       } else {
+        // TODO:
         std::stringstream ss;
         ss << i.second;
         var->fromString(ss.str());
