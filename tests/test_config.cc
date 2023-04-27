@@ -80,6 +80,16 @@ void parser_yaml(const YAML::Node& node, int level) {
 
 class Person {
  public:
+  Person operator=(const Person& p) {
+    name_ = p.name_;
+    age_ = p.age_;
+    sex_ = p.sex_;
+    return p;
+  }
+  bool operator==(const Person& oth) const {
+    return name_ == oth.name_ && age_ == oth.age_ && sex_ == oth.sex_;
+  }
+
   std::string toString() const {
     std::stringstream ss;
     ss << "{Person name=" << name_
@@ -160,6 +170,12 @@ moka::ConfigVar<std::map<std::string, std::vector<Person>>>::ptr g_person_vec_ma
 // 测试自定义类
 void test_class() {
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person->get_name() <<" before " << g_person->get_value().toString() << "-" << g_person->toString();
+
+  g_person->addListener(11, [](const Person& old_val, const Person& new_val){
+    MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "old_val=" << old_val.toString()
+                                   << " new val=" << new_val.toString();
+  });
+
   XX_CM(g_person_map, map, before);
   XX_CM_VEC(g_person_vec_map, vec_map, before);
   // MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person_vec_map->get_name() <<" before " << g_person_vec_map->toString();

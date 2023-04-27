@@ -3,5 +3,11 @@ build
 CMakeFiles
 # 忽略部分测试文件
 tests/log.txt
+# 忽略vscode配置文件
 .vscode
+# 忽略lib文件
+lib
+# 忽略bin文件中处理conf的文件
+bin
+![bin/conf]
 

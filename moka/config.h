@@ -12,6 +12,7 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <functional>
 #include "log.h"
 
 namespace moka {
@@ -22,7 +23,7 @@ template<class F, class T>
 class LexicalCast {
  public:
   T operator()(const F& v) {
-    return boost::lexical_cast<T>(v);
+    return boost::lexical_cast<T>(v);  // 基本类型的转换
   }
 };
 
@@ -247,6 +248,8 @@ template<class T, class FromStr = LexicalCast<std::string, T>,
 class ConfigVar : public ConfigVarBase {
  public:
   using ptr = std::shared_ptr<ConfigVar>;
+  using chan_cb = std::function<void(const T& old_val, const T& new_val)>;
+
   ConfigVar(const std::string& name, const T& defualt_value, const std::string& description = "") 
       : ConfigVarBase(name, description), val_(defualt_value) {
       // 子类显示调用直接父类的构造函数
@@ -260,10 +263,28 @@ class ConfigVar : public ConfigVarBase {
   virtual const std::string get_typename() const override { return typeid(T).name(); }
 
   const T get_value() const { return val_; }
-  void set_value(const T& val) { val_ = val; }
+
+  // 在fromString中调用设置值，此时调用回调函数通知变更
+  void set_value(const T& val) {
+    if (val == val_) {
+      // 没有发生变化
+      return;
+    }
+    for (auto i : cbs_) {
+      i.second(val_, val);  // 调用变更回调函数
+    }
+    val_ = val;
+  }
+
+  // 观察者模式
+  void addListener(uint64_t key, chan_cb cb) { cbs_[key] = cb; }
+  void delListener(uint64_t key) { cbs_.erase(key); }
+  void clearListener() { cbs_.clear(); }
+  chan_cb get_listener(uint64_t key) { return cbs_.find(key) == cbs_.end()? nullptr: cbs_[key]; }
 
  private:
   T val_;   // 配置项参数值
+  std::map<uint64_t, chan_cb> cbs_;  // 变更回调函数集合(使用map类型可以通过key来操作)
 };
 
 // ConfigVarBase管理类(单例模式)
@@ -288,7 +309,6 @@ class Config {
 template<class T, class FromStr, class ToStr>
 std::string ConfigVar<T, FromStr, ToStr>::toString() {
   try {
-    // return std::to_string(val_);
     // 调用仿函数
     return ToStr()(val_);
   } catch (std::exception& e) {
@@ -303,7 +323,7 @@ std::string ConfigVar<T, FromStr, ToStr>::toString() {
 template<class T, class FromStr, class ToStr>
 bool ConfigVar<T, FromStr, ToStr>::fromString(const std::string& val) {
   try {
-    set_value(FromStr()(val));
+    set_value(FromStr()(val));  // FromStr将string转换成T类型
     return true;
   } catch (std::exception& e) {
     MOKA_LOG_ERROR(MOKA_LOG_ROOT()) << "ConfigVar::toString exception"
@@ -316,7 +336,6 @@ bool ConfigVar<T, FromStr, ToStr>::fromString(const std::string& val) {
 template<class T>
 typename ConfigVar<T>::ptr Config::lookup(const std::string& name,
     const T& default_val, const std::string& description) {
-  // auto tmp = lookup<T>(name);  // 查找配置名对应的配置项是否在集合中
   auto it = datas_.find(name);
   if (it != datas_.end()) {
     // 存在
