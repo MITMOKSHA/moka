@@ -10,8 +10,8 @@ moka::ConfigVar<float>::ptr g_float_value_config =
 // 错误类型转换测试
 // datas_中已经有"system.port"到int的映射，但此lookup查找"system.port"，找到后类型转换会出错
 // dynamic_pointer_cast返回nullptr
-moka::ConfigVar<float>::ptr g_float_valuex_config = 
-  moka::Config::lookup("system.port", (float)8080, "system port2");
+// moka::ConfigVar<float>::ptr g_float_valuex_config = 
+//   moka::Config::lookup("system.port", (float)8080, "system port2");
 
 moka::ConfigVar<std::vector<int>>::ptr g_int_vec_value_config = 
   moka::Config::lookup("system.int_vec", std::vector<int>{1,2}, "system int vec");
@@ -180,7 +180,7 @@ void test_class() {
   XX_CM_VEC(g_person_vec_map, vec_map, before);
   // MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person_vec_map->get_name() <<" before " << g_person_vec_map->toString();
 
-  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/log.yml");  // 加载yaml文件
+  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/test.yml");  // 加载yaml文件
   moka::Config::loadFromYaml(root);
 
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person->get_name() << " after " << g_person->get_value().toString() << "-" << g_person->toString();
@@ -192,7 +192,7 @@ void test_class() {
 
 // 测试yaml的解析读取
 void test_yaml() {
-  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/log.yml");  // 加载yaml文件
+  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/test.yml");  // 加载yaml文件
   parser_yaml(root, 0);  // 解析yaml文件
   // MOKA_LOG_INFO(MOKA_LOG_ROOT()) << root;
 }
@@ -211,7 +211,7 @@ void test_config() {
 
 
   // 从yaml文件中加载配置项参数值到现有的配置项中(即在集合中的配置项)
-  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/log.yml");
+  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/test.yml");
   moka::Config::loadFromYaml(root);
 
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "after:" << g_int_value_config->get_value();
@@ -225,9 +225,35 @@ void test_config() {
   XX_M(g_str_int_umap_value_config, str_int_umap, after);
 }
 
+void test_log() {
+  // 往日志管理器集合中增加system日志器，目前存在{system, root}，日志器管理器类的构造函数会初始化root日志器
+  static moka::Logger::ptr system_log = MOKA_LOG_NAME("system");
+  // 输出system的日志信息
+  MOKA_LOG_INFO(system_log) << "hello system" << std::endl;
+
+  // 输出当前日志管理器中存在的日志器的配置信息，输出{system, root}
+  std::cout << moka::LoggerMgr::get_instance()->toYamlString() << std::endl;
+
+  // 加载log.yaml中的日志配置信息到LogDefine结构体中(即替换name相同的configVar的val属性息)
+  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/log.yml");
+  moka::Config::loadFromYaml(root);
+  std::cout << "========================" << std::endl;
+
+  // 测试输出更新后日志管理器中的日志器信息
+  std::cout << moka::LoggerMgr::get_instance()->toYamlString() << std::endl;
+  std::cout << "========================" << std::endl;
+  std::cout << root << std::endl;  // yml文件信息
+  MOKA_LOG_INFO(system_log) << "hello system" << std::endl;
+
+  // 测试更改root formatter会更改appender fmt
+  system_log->set_formatter("%d - %m%n");
+  MOKA_LOG_INFO(system_log) << "hello system" << std::endl;
+}
+
 int main(int agrc, char** argv) {
   // test_yaml();
   // test_config();
-  test_class();
+  // test_class();
+  test_log();
   return 0;
 }

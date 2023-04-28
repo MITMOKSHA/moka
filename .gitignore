@@ -1,13 +1,14 @@
 # 忽略中间文件
 build
 CMakeFiles
-# 忽略部分测试文件
-tests/log.txt
+# 忽略除了.cc以外的测试文件
+tests
+!tests/*.cc
 # 忽略vscode配置文件
 .vscode
 # 忽略lib文件
 lib
 # 忽略bin文件中处理conf的文件
-bin
-![bin/conf]
+bin/test
+bin/test_config
 

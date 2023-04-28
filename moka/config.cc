@@ -2,11 +2,9 @@
 
 namespace moka {
 
-Config::ConfigVarMap Config::datas_;  // 定义
-
 ConfigVarBase::ptr Config::lookupBase(const std::string& name) {
-  auto it = datas_.find(name);
-  return it == datas_.end()? nullptr: it->second;
+  auto it = get_datas().find(name);
+  return it == get_datas().end()? nullptr: it->second;
 }
 
 // A:

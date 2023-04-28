@@ -301,7 +301,11 @@ class Config {
   static ConfigVarBase::ptr lookupBase(const std::string& name);     // 查找集合是否有当前配置名对应的配置项
 
  private:
-  static ConfigVarMap datas_;  // 对象间共享，目前系统运行包含的配置项，存储配置名到具体配置项的映射集合
+  static ConfigVarMap& get_datas() {
+    // 定义局部静态变量保证声明顺序
+    static ConfigVarMap datas;  // 对象间共享，目前系统运行包含的配置项，存储配置名到具体配置项的映射集合
+    return datas;
+  }
 };
 
 
@@ -336,8 +340,8 @@ bool ConfigVar<T, FromStr, ToStr>::fromString(const std::string& val) {
 template<class T>
 typename ConfigVar<T>::ptr Config::lookup(const std::string& name,
     const T& default_val, const std::string& description) {
-  auto it = datas_.find(name);
-  if (it != datas_.end()) {
+  auto it = get_datas().find(name);
+  if (it != get_datas().end()) {
     // 存在
     auto tmp = std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
     if (tmp) {
@@ -363,7 +367,7 @@ typename ConfigVar<T>::ptr Config::lookup(const std::string& name,
   }
   // 不存在，新建配置名和配置项指针的映射并放入datas_集合中。保证配置模块定义即可用的特性
   typename ConfigVar<T>::ptr v(new ConfigVar<T>(name, default_val, description));
-  datas_[name] = v;  // 以数组的方式插入哈希表中
+  get_datas()[name] = v;  // 以数组的方式插入哈希表中
   return v;
 }
 

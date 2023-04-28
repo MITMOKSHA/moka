@@ -13,7 +13,7 @@ int main() {
   logger->addAppender(file_appender);
 
   moka::LogFormatter::ptr fmt(new moka::LogFormatter("%d%T%p%T%m%n"));  // 自定义格式输出(不使用默认格式器)
-  file_appender->set_formatter(fmt);
+  file_appender->set_formatter(fmt, true);
   file_appender->set_level(moka::LogLevel::ERROR);
 
   // moka::LogEvent::ptr event(new moka::LogEvent(__FILE__, 0, __LINE__, moka::GetThreadId(), moka::GetFiberId(), time(0), logger));  // 初始化日志事件
