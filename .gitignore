@@ -11,4 +11,5 @@ lib
 # 忽略bin文件中处理conf的文件
 bin/test
 bin/test_config
+bin/test_thread
 
