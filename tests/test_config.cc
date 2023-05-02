@@ -180,7 +180,7 @@ void test_class() {
   XX_CM_VEC(g_person_vec_map, vec_map, before);
   // MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person_vec_map->get_name() <<" before " << g_person_vec_map->toString();
 
-  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/test.yml");  // 加载yaml文件
+  YAML::Node root = YAML::LoadFile("/home/moksha/moka/tests/test.yml");  // 加载yaml文件
   moka::Config::loadFromYaml(root);
 
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person->get_name() << " after " << g_person->get_value().toString() << "-" << g_person->toString();
@@ -192,7 +192,7 @@ void test_class() {
 
 // 测试yaml的解析读取
 void test_yaml() {
-  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/test.yml");  // 加载yaml文件
+  YAML::Node root = YAML::LoadFile("/home/moksha/moka/tests/test.yml");  // 加载yaml文件
   parser_yaml(root, 0);  // 解析yaml文件
   // MOKA_LOG_INFO(MOKA_LOG_ROOT()) << root;
 }
@@ -211,7 +211,7 @@ void test_config() {
 
 
   // 从yaml文件中加载配置项参数值到现有的配置项中(即在集合中的配置项)
-  YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/test.yml");
+  YAML::Node root = YAML::LoadFile("/home/moksha/moka/tests/test.yml");
   moka::Config::loadFromYaml(root);
 
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "after:" << g_int_value_config->get_value();

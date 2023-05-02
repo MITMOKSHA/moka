@@ -82,7 +82,14 @@ std::stringstream &LogEventWrap::get_ss() {
   return event_->get_ss();
 }
 
+void LogAppender::set_formatter(LogFormatter::ptr formatter, bool is_own_fmt) {
+  Mutex::LockGuard lock(mutex_);
+  formatter_ = formatter;
+  is_own_fmt_ = is_own_fmt;
+}
+
 void LogAppender::set_formatter(const std::string& val, bool is_own_fmt) {
+  Mutex::LockGuard lock(mutex_);
   LogFormatter::ptr fmt(new LogFormatter(val));
   if (fmt->isError()) {
     std::cout << "log appender setformatter " << "value=" << val << " invalid formatter" << std::endl;
@@ -92,6 +99,11 @@ void LogAppender::set_formatter(const std::string& val, bool is_own_fmt) {
   is_own_fmt_ = is_own_fmt;
 }
 
+LogFormatter::ptr LogAppender::get_formatter() {
+  Mutex::LockGuard lock(mutex_);
+  return formatter_;
+}
+
 Logger::Logger(const std::string& name)
     : name_(name), level_(LogLevel::DEBUG), root_(nullptr) {
   formatter_.reset(new LogFormatter("[%d{%Y-%m-%d %H:%M:%S}]%T%t%T%F%T[%p]%T[%c]%T%f:%l%T%m%n"));  // 初始化日志器的默认格式器
@@ -99,13 +111,14 @@ Logger::Logger(const std::string& name)
 
 void Logger::log(LogLevel::level level, LogEvent::ptr event) {
   if (level >= level_) {    // 判断level是否有输出？若输出的日志级别大于当前的日志器级别即可输出
-      for (auto& i : appenders_) {
-        i->log(level, event);  // 调用appender的log输出
-      }
-      if (appenders_.empty() && root_) {
-        // 如果logger没有对应的appender，使用的root写log
-        root_->log(level, event);
-      }
+    Mutex::LockGuard lock(mutex_);
+    for (auto& i : appenders_) {
+      i->log(level, event);  // 调用appender的log输出
+    }
+    if (appenders_.empty() && root_) {
+      // 如果logger没有对应的appender，使用的root写log
+      root_->log(level, event);
+    }
   }
 }
 
@@ -130,6 +143,7 @@ void Logger::fatal(LogEvent::ptr event) {
 }
 
 void Logger::addAppender(LogAppender::ptr appender) {
+  Mutex::LockGuard lock(mutex_);
   if (!(appender->has_fmt())) {
     // 如果没有formatter则把当前日志器的formatter给它
     appender->set_formatter(formatter_, false);  // false表示appender用的是日志器的fmt
@@ -138,6 +152,7 @@ void Logger::addAppender(LogAppender::ptr appender) {
 }
 
 void Logger::delAppender(LogAppender::ptr appender) {
+  Mutex::LockGuard lock(mutex_);
   for (auto it = appenders_.begin(); it != appenders_.end(); ++it) {
     if (*it == appender) {
       appenders_.erase(it); // 会出现迭代器失效
@@ -146,11 +161,18 @@ void Logger::delAppender(LogAppender::ptr appender) {
   }
 }
 
+void Logger::clearAppenders() {
+  Mutex::LockGuard lock(mutex_);
+  appenders_.clear();
+}
+
 void Logger::set_formatter(LogFormatter::ptr fmt) {
+  Mutex::LockGuard lock(mutex_);
   formatter_ = fmt;
   updateAppenderFmt();
 }
 void Logger::set_formatter(const std::string& val) {
+  Mutex::LockGuard lock(mutex_);
   moka::LogFormatter::ptr fmt(new moka::LogFormatter(val));
   if (fmt->isError()) {
     std::cout << "log setformatter name" << name_ << "value=" << val << " invalid formatter" << std::endl;
@@ -160,7 +182,13 @@ void Logger::set_formatter(const std::string& val) {
   updateAppenderFmt();
 }
 
+LogFormatter::ptr Logger::get_formatter() {
+  Mutex::LockGuard lock(mutex_);
+  return formatter_;
+}
+
 std::string Logger::toYamlString() {
+  Mutex::LockGuard lock(mutex_);
   YAML::Node node;
   node["name"] = name_;
   node["level"] = LogLevel::toString(level_);
@@ -186,11 +214,13 @@ void Logger::updateAppenderFmt() {
 
 void StdoutLogAppender::log(LogLevel::level level, LogEvent::ptr event) {
   if (level >= level_) { 
+    Mutex::LockGuard lock(mutex_);      // 保证一条日志输出完整的信息
     std::cout << formatter_->format(event);   // cout将该字符串输出到终端中
   }
 }
 
 std::string StdoutLogAppender::toYamlString() {
+  Mutex::LockGuard lock(mutex_);
   YAML::Node node;
   node["type"] = "StdoutLogAppender";
   if (level_ != LogLevel::UNKNOW) {
@@ -211,11 +241,13 @@ FileLogAppender::FileLogAppender(const std::string filename)
 
 void FileLogAppender::log(LogLevel::level level, LogEvent::ptr event) {
   if (level >= level_) {
+    Mutex::LockGuard lock(mutex_);
     filestream_ << formatter_->format(event);  // 输出到文件流中(根据不同的item输出不同的内容)
   }
 }
 
 std::string FileLogAppender::toYamlString() {
+  Mutex::LockGuard lock(mutex_);
   YAML::Node node;
   node["type"] = "FileLogAppender";
   node["file"] = filename_;
@@ -232,6 +264,7 @@ std::string FileLogAppender::toYamlString() {
 }
 
 bool FileLogAppender::reopen() {
+  Mutex::LockGuard lock(mutex_);
   if (filestream_) {
     filestream_.close();
   }
@@ -383,6 +416,7 @@ LoggerManager::LoggerManager() {
 }
 
 Logger::ptr LoggerManager::get_logger(const std::string &name) {
+  Mutex::LockGuard lock(mutex_);
   auto it = loggers_.find(name);
   if (it != loggers_.end()) {
     return it->second;
@@ -392,6 +426,17 @@ Logger::ptr LoggerManager::get_logger(const std::string &name) {
   logger->set_root(root_);    // 更新日志器的logger
   loggers_[name] = logger;
   return logger;
+}
+
+std::string LoggerManager::toYamlString() {
+  Mutex::LockGuard lock(mutex_);
+  YAML::Node node;
+  for (auto i : loggers_) {
+    node.push_back(YAML::Load(i.second->toYamlString()));
+  }
+  std::stringstream ss;
+  ss << node;
+  return ss.str();
 }
 
 // 日志输出器配置
@@ -588,13 +633,4 @@ struct LogIniter {
 // 在main函数之前注册log配置更改的回调函数(全局变量和静态变量在main函数完成初始化)
 static LogIniter __log_init;
 
-std::string LoggerManager::toYamlString() {
-  YAML::Node node;
-  for (auto i : loggers_) {
-    node.push_back(YAML::Load(i.second->toYamlString()));
-  }
-  std::stringstream ss;
-  ss << node;
-  return ss.str();
-}
 }

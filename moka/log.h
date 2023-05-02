@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include "util.h"
 #include "singleton.h"
+#include "thread.h"
 
 // 测试宏
 #define MOKA_LOG_LEVEL(logger, level) \
@@ -142,16 +143,17 @@ class LogAppender {
   virtual ~LogAppender() {}
   virtual void log(LogLevel::level level, LogEvent::ptr event) = 0;   // 调用日志格式器的format方法遍历items输出字符串
   virtual std::string toYamlString() = 0;                             // 方便调试
-  void set_formatter(LogFormatter::ptr formatter, bool is_own_fmt) { formatter_ = formatter; is_own_fmt_ = is_own_fmt; }
+  void set_formatter(LogFormatter::ptr formatter, bool is_own_fmt);
   void set_formatter(const std::string& val, bool is_own_fmt);
-  LogFormatter::ptr get_formatter() { return formatter_; }
+  LogFormatter::ptr get_formatter();
   LogLevel::level get_level() { return level_; }
   void set_level(LogLevel::level level) { level_ = level; }
   bool has_fmt() { return is_own_fmt_; }
 
- protected:   // 派生类要使用
+ protected:      // 派生类可访问
   LogLevel::level level_ = LogLevel::DEBUG;
   LogFormatter::ptr formatter_;
+  Mutex mutex_;  // 自旋锁(保证写入的线程安全)
   bool is_own_fmt_ = false;
 };
 
@@ -170,7 +172,7 @@ class Logger {
 
   void addAppender(LogAppender::ptr appender);
   void delAppender(LogAppender::ptr appender);
-  void clearAppenders() { appenders_.clear(); }
+  void clearAppenders();
 
   LogLevel::level get_level() const { return level_; }
   void set_level(LogLevel::level level) { level_ = level; }
@@ -179,12 +181,13 @@ class Logger {
 
   void set_formatter(LogFormatter::ptr fmt);
   void set_formatter(const std::string& val);
-  LogFormatter::ptr get_formatter() { return formatter_; }
+  LogFormatter::ptr get_formatter();
   std::string toYamlString();  // 方便调试
  private:
   void updateAppenderFmt();                 // (在setfmt中调用)当日志器的fmt发生改变时，更新继承了日志器的fmt的appender的fmt
   std::string name_;                        // 日志名称
   LogLevel::level level_;                   // 日志级别(日志默认级别，若日志事件的级别大于日志器的级别则输出)
+  Mutex mutex_;
   std::list<LogAppender::ptr> appenders_;   // appender集合(一个日志可以有多个输出地，如：文件、终端)
   LogFormatter::ptr formatter_;             // 格式器(日志默认格式)
   Logger::ptr root_;                        // 根日志器
@@ -222,6 +225,7 @@ class LoggerManager {
 
  private:
   // void init();
+  Mutex mutex_;
   std::unordered_map<std::string, Logger::ptr> loggers_;  // 日志集合
   Logger::ptr root_;  // 根日志
 };

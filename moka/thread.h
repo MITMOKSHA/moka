@@ -27,7 +27,8 @@ class Semaphore {
   sem_t sem_;
 };
 
-// 范围锁类(利用构造函数和析构函数来进行加锁/解锁)，使用模板类保证RAII机制
+
+// mutex lock_guard(利用构造函数和析构函数来进行加锁/解锁)，使用模板类保证RAII机制
 template<class T>
 class ScopedLock {
  public:
@@ -57,6 +58,38 @@ class ScopedLock {
  private:
   T& mutex_;
   bool is_locked = false;
+};
+
+class Mutex {
+ public:
+  using LockGuard = ScopedLock<Mutex>;
+  Mutex() {
+    pthread_mutex_init(&mutex_, nullptr);
+  }
+
+  ~Mutex() {
+    pthread_mutex_destroy(&mutex_);
+  }
+
+  void lock() {
+    pthread_mutex_lock(&mutex_);
+  }
+  
+  void unlock() {
+    pthread_mutex_unlock(&mutex_);
+  }
+ private:
+  pthread_mutex_t mutex_;
+};
+
+// 空锁(测试日志线程安全)
+class NullMutex {
+ public:
+  using LockGuard = ScopedLock<NullMutex>; 
+  NullMutex() {}
+  ~NullMutex() {}
+  void lock() {}
+  void unlock() {}
 };
 
 // 读锁lock_guard
