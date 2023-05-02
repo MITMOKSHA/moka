@@ -3,6 +3,7 @@
 namespace moka {
 
 ConfigVarBase::ptr Config::lookupBase(const std::string& name) {
+  RWmutex::ReadLock lock(get_mutex());
   auto it = get_datas().find(name);
   return it == get_datas().end()? nullptr: it->second;
 }
@@ -44,12 +45,19 @@ void Config::loadFromYaml(const YAML::Node& root) {
       if (i.second.IsScalar()) {
         var->fromString(i.second.Scalar());
       } else {
-        // TODO:
         std::stringstream ss;
         ss << i.second;
         var->fromString(ss.str());
       }
     }
+  }
+}
+
+void Config::visit(std::function<void(ConfigVarBase::ptr)> cb) {
+  RWmutex::ReadLock lock(get_mutex());
+  ConfigVarMap& m = get_datas();
+  for (auto it = m.begin(); it != m.end(); ++it) {
+    cb(it->second);
   }
 }
 

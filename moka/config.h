@@ -13,7 +13,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <functional>
+
 #include "log.h"
+#include "thread.h"
 
 namespace moka {
 
@@ -262,27 +264,49 @@ class ConfigVar : public ConfigVarBase {
   virtual bool fromString(const std::string& val) override;
   virtual const std::string get_typename() const override { return typeid(T).name(); }
 
-  const T get_value() const { return val_; }
+  const T get_value() {
+    RWmutex::ReadLock lock(mutex_);
+    return val_;
+  }
 
   // 在fromString中调用设置值，此时调用回调函数通知变更
   void set_value(const T& val) {
-    if (val == val_) {
-      // 没有发生变化
-      return;
+    {
+      RWmutex::ReadLock lock(mutex_);
+      if (val == val_) {
+        // 没有发生变化
+        return;
+      }
+      for (auto i : cbs_) {
+        i.second(val_, val);  // 调用变更回调函数
+      }
     }
-    for (auto i : cbs_) {
-      i.second(val_, val);  // 调用变更回调函数
-    }
+    RWmutex::WriteLock lock(mutex_);
     val_ = val;
   }
 
   // 观察者模式
-  void addListener(uint64_t key, chan_cb cb) { cbs_[key] = cb; }
-  void delListener(uint64_t key) { cbs_.erase(key); }
-  void clearListener() { cbs_.clear(); }
-  chan_cb get_listener(uint64_t key) { return cbs_.find(key) == cbs_.end()? nullptr: cbs_[key]; }
+  void addListener(uint64_t key, chan_cb cb) {
+    RWmutex::WriteLock lock(mutex_);
+    cbs_[key] = cb;
+  }
+
+  void delListener(uint64_t key) {
+    RWmutex::WriteLock lock(mutex_);
+    cbs_.erase(key);
+  }
+
+  void clearListener() {
+    RWmutex::WriteLock lock(mutex_);
+    cbs_.clear();
+  }
+  chan_cb get_listener(uint64_t key) {
+    RWmutex::ReadLock lock(mutex_);
+    return cbs_.find(key) == cbs_.end()? nullptr: cbs_[key];
+  }
 
  private:
+  RWmutex mutex_;
   T val_;   // 配置项参数值
   std::map<uint64_t, chan_cb> cbs_;  // 变更回调函数集合(使用map类型可以通过key来操作)
 };
@@ -300,11 +324,17 @@ class Config {
   static void loadFromYaml(const YAML::Node& root);                  // 从yaml文件中加载配置参数信息
   static ConfigVarBase::ptr lookupBase(const std::string& name);     // 查找集合是否有当前配置名对应的配置项
 
+  static void visit(std::function<void(ConfigVarBase::ptr)> cb);     // 用户自定义测试
+
  private:
   static ConfigVarMap& get_datas() {
     // 定义局部静态变量保证声明顺序
     static ConfigVarMap datas;  // 对象间共享，目前系统运行包含的配置项，存储配置名到具体配置项的映射集合
     return datas;
+  }
+  static RWmutex& get_mutex() {
+    static RWmutex s_mutex;
+    return s_mutex;
   }
 };
 
@@ -313,6 +343,7 @@ class Config {
 template<class T, class FromStr, class ToStr>
 std::string ConfigVar<T, FromStr, ToStr>::toString() {
   try {
+    RWmutex::ReadLock lock(mutex_);
     // 调用仿函数
     return ToStr()(val_);
   } catch (std::exception& e) {
@@ -340,6 +371,7 @@ bool ConfigVar<T, FromStr, ToStr>::fromString(const std::string& val) {
 template<class T>
 typename ConfigVar<T>::ptr Config::lookup(const std::string& name,
     const T& default_val, const std::string& description) {
+  RWmutex::WriteLock lock(get_mutex());
   auto it = get_datas().find(name);
   if (it != get_datas().end()) {
     // 存在

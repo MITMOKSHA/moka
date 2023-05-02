@@ -253,7 +253,15 @@ void test_log() {
 int main(int agrc, char** argv) {
   // test_yaml();
   // test_config();
-  test_class();
+  // test_class();
   // test_log();
+
+  // 测试visit
+  // moka::Config::visit([](moka::ConfigVarBase::ptr var) {
+  //   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "name=" << var->get_name()
+  //                           << "description=" << var->get_description()
+  //                           << "typename=" << var->get_typename()
+  //                           << "value=" << var->toString();
+  // });
   return 0;
 }
