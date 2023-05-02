@@ -153,7 +153,7 @@ class LogAppender {
  protected:      // 派生类可访问
   LogLevel::level level_ = LogLevel::DEBUG;
   LogFormatter::ptr formatter_;
-  Mutex mutex_;  // 自旋锁(保证写入的线程安全)
+  Spinlock mutex_;  // 自旋锁(保证写入的线程安全)
   bool is_own_fmt_ = false;
 };
 
@@ -187,7 +187,7 @@ class Logger {
   void updateAppenderFmt();                 // (在setfmt中调用)当日志器的fmt发生改变时，更新继承了日志器的fmt的appender的fmt
   std::string name_;                        // 日志名称
   LogLevel::level level_;                   // 日志级别(日志默认级别，若日志事件的级别大于日志器的级别则输出)
-  Mutex mutex_;
+  Spinlock mutex_;
   std::list<LogAppender::ptr> appenders_;   // appender集合(一个日志可以有多个输出地，如：文件、终端)
   LogFormatter::ptr formatter_;             // 格式器(日志默认格式)
   Logger::ptr root_;                        // 根日志器
@@ -213,6 +213,7 @@ class FileLogAppender : public LogAppender {
   bool reopen();  // 根据文件名成员重新打开文件，文件打开成功返回true
   std::string filename_;
   std::ofstream filestream_;
+  uint64_t last_time_;
 };
 
 // 负责管理所有的日志器(单例模式)
@@ -225,7 +226,7 @@ class LoggerManager {
 
  private:
   // void init();
-  Mutex mutex_;
+  Spinlock mutex_;
   std::unordered_map<std::string, Logger::ptr> loggers_;  // 日志集合
   Logger::ptr root_;  // 根日志
 };

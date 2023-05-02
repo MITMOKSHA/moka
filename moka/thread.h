@@ -28,7 +28,7 @@ class Semaphore {
 };
 
 
-// mutex lock_guard(利用构造函数和析构函数来进行加锁/解锁)，使用模板类保证RAII机制
+// mutex/spinlock lock_guard(利用构造函数和析构函数来进行加锁/解锁)，使用模板类保证RAII机制
 template<class T>
 class ScopedLock {
  public:
@@ -182,6 +182,29 @@ class RWmutex {
   }
  private:
   pthread_rwlock_t lock_;
+};
+
+class Spinlock {
+ public:
+  using LockGuard = ScopedLock<Spinlock>;
+  Spinlock() {
+    pthread_spin_init(&mutex_, 0);
+  }
+
+  ~Spinlock() {
+    pthread_spin_destroy(&mutex_);
+  }
+
+  void lock() {
+    pthread_spin_lock(&mutex_);
+  }
+
+  void unlock() {
+    pthread_spin_unlock(&mutex_);
+  }
+
+ private:
+  pthread_spinlock_t mutex_;
 };
 
 // 线程模块
