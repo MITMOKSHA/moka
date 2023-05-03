@@ -219,12 +219,12 @@ class Thread {
   void join();  // 封装join系统调用
 
   // 这两个变量用局部线程变量存储
-  static Thread* getThis();               // 获得当前的线程
-  static const std::string& getName();    // 获得当前线程的名称(提供给日志使用)
+  static Thread* GetThis();               // 获得当前的线程
+  static const std::string& GetName();    // 获得当前线程的名称(提供给日志使用)
 
-  static void setName(const std::string& name);
+  static void SetName(const std::string& name);
 
-  static void* run(void* arg);            // 线程创建(pthread_create)时调用的函数
+  static void* Run(void* arg);            // 线程创建(pthread_create)时调用的函数
 
  private:
   // 禁用移动

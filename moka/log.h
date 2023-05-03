@@ -21,7 +21,7 @@
 #define MOKA_LOG_LEVEL(logger, level) \
   if(logger->get_level() <= level) \
     moka::LogEventWrap(moka::LogEvent::ptr(new moka::LogEvent(__FILE__, 0, __LINE__, moka::GetThreadId(), \
-                 moka::GetFiberId(), time(0), logger, level))).get_ss()
+                 moka::GetFiberId(), moka::GetThreadName(), time(0), logger, level))).get_ss()
           
 #define MOKA_LOG_DEBUG(logger) MOKA_LOG_LEVEL(logger, moka::LogLevel::DEBUG)
 #define MOKA_LOG_INFO(logger) MOKA_LOG_LEVEL(logger, moka::LogLevel::INFO)
@@ -33,7 +33,7 @@
 #define MOKA_LOG_FMT_LEVEL(logger, level, fmt, ...) \
   if (logger->get_level() <= level) \
     moka::LogEventWrap(moka::LogEvent::ptr(new moka::LogEvent(__FILE__, 0, __LINE__, moka::GetThreadId(), \
-                 moka::GetFiberId(), time(0), logger, level))).get_event()->format(fmt, __VA_ARGS__)
+                 moka::GetFiberId(), moka::GetThreadName(), time(0), logger, level))).get_event()->format(fmt, __VA_ARGS__)
 
 #define MOKA_LOG_FMT_DEBUG(logger, fmt, ...) MOKA_LOG_FMT_LEVEL(logger, moka::LogLevel::DEBUG, fmt, __VA_ARGS__)
 #define MOKA_LOG_FMT_INFO(logger, fmt, ...) MOKA_LOG_FMT_LEVEL(logger, moka::LogLevel::INFO, fmt, __VA_ARGS__)
@@ -41,9 +41,9 @@
 #define MOKA_LOG_FMT_ERROR(logger, fmt, ...) MOKA_LOG_FMT_LEVEL(logger, moka::LogLevel::ERROR, fmt, __VA_ARGS__)
 #define MOKA_LOG_FMT_FATAL(logger, fmt, ...) MOKA_LOG_FMT_LEVEL(logger, moka::LogLevel::FATAL, fmt, __VA_ARGS__)
 
-#define MOKA_LOG_ROOT() moka::LoggerMgr::get_instance()->get_root()
+#define MOKA_LOG_ROOT() moka::LoggerMgr::GetInstance()->get_root()
 // 查找对应name的logger，如果不存在的，则会生成一个对应name的logger
-#define MOKA_LOG_NAME(name) moka::LoggerMgr::get_instance()->get_logger(name)
+#define MOKA_LOG_NAME(name) moka::LoggerMgr::GetInstance()->get_logger(name)
 
 namespace moka {
 
@@ -62,8 +62,8 @@ class LogLevel {
     ERROR = 4,
     FATAL = 5
   };
-  static const char* toString(LogLevel::level);
-  static LogLevel::level fromString(const std::string&);
+  static const char* ToString(LogLevel::level);
+  static LogLevel::level FromString(const std::string&);
 };
 
 // 日志事件，用于记录日志现场
@@ -71,7 +71,7 @@ class LogEvent {
  public:
   using ptr = std::shared_ptr<LogEvent>;
   LogEvent(const char* file, uint32_t elapse, uint32_t line, uint32_t thread_id,
-           uint32_t fiber_id, uint32_t timestamp,
+           uint32_t fiber_id, const std::string& thread_name, uint32_t timestamp,
            std::shared_ptr<Logger> logger, LogLevel::level level = LogLevel::DEBUG);
   ~LogEvent();
   
@@ -80,6 +80,7 @@ class LogEvent {
   uint32_t get_line_num() { return line_num_; }
   uint32_t get_thread_id() { return thread_id_; }
   uint32_t get_fiber_id() { return fiber_id_; }
+  const std::string& get_thread_name() const { return thread_name_; }
   uint32_t get_timestamp_() { return timestamp_; }
   const std::string get_content() const { return ss_.str(); }
   LogLevel::level get_level() { return level_; }
@@ -94,6 +95,7 @@ class LogEvent {
   uint32_t line_num_ = 0;                      // 行号
   uint32_t thread_id_ = 0;                     // 线程id
   uint32_t fiber_id_ = 0;                      // 协程id
+  std::string thread_name_;                    // 线程名
   uint64_t timestamp_ = 0;                     // 时间戳
   std::stringstream ss_;                       // 文件内容
   std::shared_ptr<Logger> logger_;             // 日志器
@@ -246,7 +248,7 @@ class LevelFormatItem : public LogFormatter::FormatterItem {
  public:
   LevelFormatItem(const std::string& str = "") {}
   virtual void format(std::ostream& os, LogEvent::ptr event) override {
-    os << LogLevel::toString(event->get_level());
+    os << LogLevel::ToString(event->get_level());
   }
 
 };
@@ -274,6 +276,15 @@ class ThreadIdFormatItem : public LogFormatter::FormatterItem {
   ThreadIdFormatItem(const std::string& str = "") {}
   virtual void format(std::ostream& os, LogEvent::ptr event) override {
     os << event->get_thread_id();
+  }
+
+};
+
+class ThreadNameFormatItem : public LogFormatter::FormatterItem {
+ public:
+  ThreadNameFormatItem(const std::string& str = "") {}
+  virtual void format(std::ostream& os, LogEvent::ptr event) override {
+    os << event->get_thread_name();
   }
 
 };

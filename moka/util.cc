@@ -2,6 +2,8 @@
 #include <execinfo.h>
 
 #include "log.h"
+#include "fiber.h"
+#include "thread.h"
 
 moka::Logger::ptr g_logger = MOKA_LOG_NAME("system");
 
@@ -10,8 +12,13 @@ namespace moka {
 pid_t GetThreadId() {
   return syscall(SYS_gettid);
 }
-uint32_t GetFiberId() {
-  return 0;
+
+uint64_t GetFiberId() {
+  return moka::Fiber::GetFiberId();
+}
+
+std::string GetThreadName() {
+  return moka::Thread::GetName();
 }
 
 void Backtrace(std::vector<std::string> &bt, int size, int skip) {

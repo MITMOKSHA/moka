@@ -2,34 +2,34 @@
 #include <yaml-cpp/yaml.h>
 
 moka::ConfigVar<int>::ptr g_int_value_config = 
-  moka::Config::lookup("system.port", (int)8080, "system port");
+  moka::Config::Lookup("system.port", (int)8080, "system port");
 
 moka::ConfigVar<float>::ptr g_float_value_config = 
-  moka::Config::lookup("system.value", (float)10.2f, "system port2");
+  moka::Config::Lookup("system.value", (float)10.2f, "system port2");
 
 // 错误类型转换测试
 // datas_中已经有"system.port"到int的映射，但此lookup查找"system.port"，找到后类型转换会出错
 // dynamic_pointer_cast返回nullptr
 // moka::ConfigVar<float>::ptr g_float_valuex_config = 
-//   moka::Config::lookup("system.port", (float)8080, "system port2");
+//   moka::Config::Lookup("system.port", (float)8080, "system port2");
 
 moka::ConfigVar<std::vector<int>>::ptr g_int_vec_value_config = 
-  moka::Config::lookup("system.int_vec", std::vector<int>{1,2}, "system int vec");
+  moka::Config::Lookup("system.int_vec", std::vector<int>{1,2}, "system int vec");
 
 moka::ConfigVar<std::list<int>>::ptr g_int_list_value_config = 
-  moka::Config::lookup("system.int_list", std::list<int>{10,20}, "system int list");
+  moka::Config::Lookup("system.int_list", std::list<int>{10,20}, "system int list");
 
 moka::ConfigVar<std::set<int>>::ptr g_int_set_value_config = 
-  moka::Config::lookup("system.int_set", std::set<int>{20,10}, "system int set");
+  moka::Config::Lookup("system.int_set", std::set<int>{20,10}, "system int set");
   
 moka::ConfigVar<std::unordered_set<int>>::ptr g_int_uset_value_config = 
-  moka::Config::lookup("system.int_uset", std::unordered_set<int>{10,20}, "system int u_set");
+  moka::Config::Lookup("system.int_uset", std::unordered_set<int>{10,20}, "system int u_set");
   
 moka::ConfigVar<std::map<std::string, int>>::ptr g_str_int_map_value_config = 
-  moka::Config::lookup("system.str_int_map", std::map<std::string, int>{{"3",20}}, "system str int map");
+  moka::Config::Lookup("system.str_int_map", std::map<std::string, int>{{"3",20}}, "system str int map");
 
 moka::ConfigVar<std::unordered_map<std::string, int>>::ptr g_str_int_umap_value_config = 
-  moka::Config::lookup("system.str_int_umap", std::unordered_map<std::string, int>{{"k",20}}, "system str int umap");
+  moka::Config::Lookup("system.str_int_umap", std::unordered_map<std::string, int>{{"k",20}}, "system str int umap");
 
 // 线性容器测试宏，toString()将其转换为字符串输出
 #define XX(g_var, name, prefix) \
@@ -159,13 +159,13 @@ class LexicalCast<Person, std::string> {
 }
 
 moka::ConfigVar<Person>::ptr g_person = 
-  moka::Config::lookup("class.person", Person(), "system person");
+  moka::Config::Lookup("class.person", Person(), "system person");
   
 moka::ConfigVar<std::map<std::string, Person>>::ptr g_person_map = 
-  moka::Config::lookup("class.map", std::map<std::string, Person>(), "system person map");
+  moka::Config::Lookup("class.map", std::map<std::string, Person>(), "system person map");
 
 moka::ConfigVar<std::map<std::string, std::vector<Person>>>::ptr g_person_vec_map = 
-  moka::Config::lookup("class.vec_map", std::map<std::string, std::vector<Person>>(), "system person vec_map");
+  moka::Config::Lookup("class.vec_map", std::map<std::string, std::vector<Person>>(), "system person vec_map");
 
 // 测试自定义类
 void test_class() {
@@ -181,7 +181,7 @@ void test_class() {
   // MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person_vec_map->get_name() <<" before " << g_person_vec_map->toString();
 
   YAML::Node root = YAML::LoadFile("/home/moksha/moka/tests/test.yml");  // 加载yaml文件
-  moka::Config::loadFromYaml(root);
+  moka::Config::LoadFromYaml(root);
 
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << g_person->get_name() << " after " << g_person->get_value().toString() << "-" << g_person->toString();
   XX_CM(g_person_map, map, after);
@@ -212,7 +212,7 @@ void test_config() {
 
   // 从yaml文件中加载配置项参数值到现有的配置项中(即在集合中的配置项)
   YAML::Node root = YAML::LoadFile("/home/moksha/moka/tests/test.yml");
-  moka::Config::loadFromYaml(root);
+  moka::Config::LoadFromYaml(root);
 
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "after:" << g_int_value_config->get_value();
   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "after:" << g_float_value_config->toString();
@@ -232,15 +232,15 @@ void test_log() {
   MOKA_LOG_INFO(system_log) << "hello system" << std::endl;
 
   // 输出当前日志管理器中存在的日志器的配置信息，输出{system, root}
-  std::cout << moka::LoggerMgr::get_instance()->toYamlString() << std::endl;
+  std::cout << moka::LoggerMgr::GetInstance()->toYamlString() << std::endl;
 
   // 加载log.yaml中的日志配置信息到LogDefine结构体中(即替换name相同的configVar的val属性息)
   YAML::Node root = YAML::LoadFile("/home/moksha/moka/bin/conf/log.yml");
-  moka::Config::loadFromYaml(root);
+  moka::Config::LoadFromYaml(root);
   std::cout << "========================" << std::endl;
 
   // 测试输出更新后日志管理器中的日志器信息
-  std::cout << moka::LoggerMgr::get_instance()->toYamlString() << std::endl;
+  std::cout << moka::LoggerMgr::GetInstance()->toYamlString() << std::endl;
   std::cout << "========================" << std::endl;
   std::cout << root << std::endl;  // yml文件信息
   MOKA_LOG_INFO(system_log) << "hello system" << std::endl;

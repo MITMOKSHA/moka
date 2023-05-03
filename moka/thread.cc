@@ -5,27 +5,27 @@
 namespace moka {
 
 // 每个线程都有两个线程局部变量，存储当前线程的指针和线程的名称
-static thread_local Thread* t_thread = nullptr;            // 方便获取当前线程(在多线程环境下)
-static thread_local std::string t_thread_name = "UNKNOW";
+static thread_local Thread* t_thread = nullptr;            // 标记当前线程(在多线程环境下)
+static thread_local std::string t_thread_name = "UNKNOW";  // 标记当前线程的名称
 
 static moka::Logger::ptr g_logger = MOKA_LOG_NAME("system");
 
-Thread* Thread::getThis() {
+Thread* Thread::GetThis() {
   return t_thread;
 }
 
-const std::string& Thread::getName() {
+const std::string& Thread::GetName() {
   return t_thread_name;
 }
 
-void Thread::setName(const std::string& name) {
+void Thread::SetName(const std::string& name) {
   if (t_thread) {
     t_thread->name_ = name;
   }
   t_thread_name = name;
 }
 
-void* Thread::run(void* arg) {
+void* Thread::Run(void* arg) {
   // 获取this指针赋给thread，因为这是静态方法
   Thread* thread = (Thread*)arg;           // POSIX标准线程函数参数必须是void*，因此需要转型
   t_thread = thread;                     // 创建线程时初始化局部线程变量
@@ -51,7 +51,7 @@ Thread::Thread(std::function<void()> cb, const std::string& name)
   }
   // 新建线程，成功返回0
   // 新创建的线程执行函数run
-  int ret = pthread_create(&thread_, nullptr, run, this);  // run是static函数，需要传入this
+  int ret = pthread_create(&thread_, nullptr, Run, this);  // run是static函数，需要传入this
   if (ret) {
     MOKA_LOG_ERROR(g_logger) << "pthread_create thread fail , ret = " << ret
                              << " name=" << name;

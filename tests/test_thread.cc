@@ -11,10 +11,10 @@ moka::RWmutex mutex;
 moka::Mutex mutex2;
 
 void func1() {
-  MOKA_LOG_INFO(g_logger) << "name: " << moka::Thread::getName()
-                          << " this.name: " << moka::Thread::getThis()->getName()
+  MOKA_LOG_INFO(g_logger) << "name: " << moka::Thread::GetName()
+                          << " this.name: " << moka::Thread::GetThis()->GetName()
                           << " id: " << moka::GetThreadId()
-                          << " this.id: " << moka::Thread::getThis()->get_id();
+                          << " this.id: " << moka::Thread::GetThis()->get_id();
   for (int i = 0; i < 1000000; ++i) {
     // moka::RWmutex::WriteLock lock(mutex); // 测试写锁
     // moka::RWmutex::ReadLock lock(mutex);  // 测试读锁
@@ -36,7 +36,7 @@ void func3() {
 int main(int argc, char** argv) {
   MOKA_LOG_INFO(g_logger) << "thread test begin";
   YAML::Node root = YAML::LoadFile("/home/moksha/moka/tests/test_log.yml");
-  moka::Config::loadFromYaml(root);
+  moka::Config::LoadFromYaml(root);
 
   std::vector<moka::Thread::ptr> thread_pool;
   // 创建线程

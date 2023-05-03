@@ -3,7 +3,7 @@
 
 namespace moka {
 
-const char* LogLevel::toString(LogLevel::level level) {
+const char* LogLevel::ToString(LogLevel::level level) {
   switch (level) {
 #define XX(name) \
   case LogLevel::name: \
@@ -22,7 +22,7 @@ const char* LogLevel::toString(LogLevel::level level) {
   return "UNKNOW";
 }
 
-LogLevel::level LogLevel::fromString(const std::string& str) {
+LogLevel::level LogLevel::FromString(const std::string& str) {
 #define XX(name, v) \
   if (str == #v) \
     return LogLevel::name;
@@ -43,10 +43,10 @@ LogLevel::level LogLevel::fromString(const std::string& str) {
   return LogLevel::UNKNOW;
 }
 
-LogEvent::LogEvent(const char* file, uint32_t elapse, uint32_t line, uint32_t thread_id,
-           uint32_t fiber_id, uint32_t timestamp, std::shared_ptr<Logger> logger, LogLevel::level level)
+LogEvent::LogEvent(const char* file, uint32_t elapse, uint32_t line, uint32_t thread_id, uint32_t fiber_id,
+    const std::string& thread_name, uint32_t timestamp, std::shared_ptr<Logger> logger, LogLevel::level level)
     : filename_(file), elapse_(elapse), line_num_(line), thread_id_(thread_id),
-      fiber_id_(fiber_id), timestamp_(timestamp), logger_(logger), level_(level) {
+      fiber_id_(fiber_id), thread_name_(thread_name), timestamp_(timestamp), logger_(logger), level_(level) {
 }
 
 LogEvent::~LogEvent() {
@@ -106,7 +106,7 @@ LogFormatter::ptr LogAppender::get_formatter() {
 
 Logger::Logger(const std::string& name)
     : name_(name), level_(LogLevel::DEBUG), root_(nullptr) {
-  formatter_.reset(new LogFormatter("[%d{%Y-%m-%d %H:%M:%S}]%T%t%T%F%T[%p]%T[%c]%T%f:%l%T%m%n"));  // 初始化日志器的默认格式器
+  formatter_.reset(new LogFormatter("[%d{%Y-%m-%d %H:%M:%S}]%T%t%T%N%T%F%T[%p]%T[%c]%T%f:%l%T%m%n"));  // 初始化日志器的默认格式器
 }
 
 void Logger::log(LogLevel::level level, LogEvent::ptr event) {
@@ -191,7 +191,7 @@ std::string Logger::toYamlString() {
   Spinlock::LockGuard lock(mutex_);
   YAML::Node node;
   node["name"] = name_;
-  node["level"] = LogLevel::toString(level_);
+  node["level"] = LogLevel::ToString(level_);
   if (formatter_) {
     node["formatter"] = formatter_->get_pattern();
   }
@@ -224,7 +224,7 @@ std::string StdoutLogAppender::toYamlString() {
   YAML::Node node;
   node["type"] = "StdoutLogAppender";
   if (level_ != LogLevel::UNKNOW) {
-    node["level"] = LogLevel::toString(level_);
+    node["level"] = LogLevel::ToString(level_);
   }
   if (is_own_fmt_) {
     node["formatter"] = formatter_->get_pattern();
@@ -257,7 +257,7 @@ std::string FileLogAppender::toYamlString() {
   node["type"] = "FileLogAppender";
   node["file"] = filename_;
   if (level_ != LogLevel::UNKNOW) {
-    node["level"] = LogLevel::toString(level_);
+    node["level"] = LogLevel::ToString(level_);
   }
   if (is_own_fmt_) {
     // 如果是继承的日志器的fmt则不输出(即appender没有自己的fmt)
@@ -298,6 +298,7 @@ void LogFormatter::init() {
   %r 启动后的时间
   %c 日志名
   %t 线程id
+  %N 线程名称
   %n 回车换行
   %d 时间
   %f 文件名
@@ -385,6 +386,7 @@ void LogFormatter::init() {
         XX(r, ElapseFormatItem),
         XX(c, NameFormatItem),
         XX(t, ThreadIdFormatItem),
+        XX(N, ThreadNameFormatItem),
         XX(n, NewLineFormatItem),
         XX(d, DateTimeFormatItem),
         XX(f, FilenameFormatItem),
@@ -491,7 +493,7 @@ public:
         }
         ld.name = n["name"].as<std::string>();
         // YAML的as函数只支持基本类型的转换，转换成string之后再通过LogLevel的fromString转换为LogLevel对象
-        ld.level = LogLevel::fromString(n["level"].IsDefined()? n["level"].as<std::string>() : "");
+        ld.level = LogLevel::FromString(n["level"].IsDefined()? n["level"].as<std::string>() : "");
         if(n["formatter"].IsDefined()) {
             ld.formatter = n["formatter"].as<std::string>();
         }
@@ -544,7 +546,7 @@ public:
         YAML::Node n;
         n["name"] = i.name;
         if(i.level != LogLevel::UNKNOW) {
-            n["level"] = LogLevel::toString(i.level);
+            n["level"] = LogLevel::ToString(i.level);
         }
         if(!i.formatter.empty()) {
             n["formatter"] = i.formatter;
@@ -559,7 +561,7 @@ public:
                 n_a["type"] = "StdoutLogAppender";
             }
             if(a.level != LogLevel::UNKNOW) {
-                n_a["level"] = LogLevel::toString(a.level);
+                n_a["level"] = LogLevel::ToString(a.level);
             }
 
             if(!a.formatter.empty()) {
@@ -576,7 +578,7 @@ public:
 
 // 全局变量，初始化配置类
 moka::ConfigVar<std::set<LogDefine>>::ptr g_log_defines =
-  moka::Config::lookup("logs", std::set<LogDefine>(), "logs config");
+  moka::Config::Lookup("logs", std::set<LogDefine>(), "logs config");
 
 struct LogIniter {
   LogIniter() {

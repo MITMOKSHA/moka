@@ -2,10 +2,10 @@
 
 namespace moka {
 
-ConfigVarBase::ptr Config::lookupBase(const std::string& name) {
-  RWmutex::ReadLock lock(get_mutex());
-  auto it = get_datas().find(name);
-  return it == get_datas().end()? nullptr: it->second;
+ConfigVarBase::ptr Config::LookupBase(const std::string& name) {
+  RWmutex::ReadLock lock(GetMutex());
+  auto it = GetDatas().find(name);
+  return it == GetDatas().end()? nullptr: it->second;
 }
 
 // A:
@@ -25,7 +25,7 @@ static void listAllMember(const std::string& prefix,
     }
   }
 }
-void Config::loadFromYaml(const YAML::Node& root) {
+void Config::LoadFromYaml(const YAML::Node& root) {
   std::list<std::pair<std::string, const YAML::Node>> all_nodes;
   listAllMember("", root, all_nodes);
 
@@ -36,10 +36,10 @@ void Config::loadFromYaml(const YAML::Node& root) {
     }
 
     std::transform(key.begin(), key.end(), key.begin(), ::tolower);  // 大小写不敏感
-    // 约定优于配置，即便配置件里有相应的配置项，也不会去解析，只有找到约定的内容才会进行覆盖/更新
-    ConfigVarBase::ptr var = lookupBase(key);  // 在配置名和配置项的映射中查找key名称对应的配置项，返回指针
+    // 约定优于配置，即便配置文件里有相应的配置项，也不会去解析，只有找到约定的内容才会进行覆盖/更新
+    ConfigVarBase::ptr var = LookupBase(key);  // 在配置名和配置项的映射中查找key名称对应的配置项，返回指针
     
-    // 若找到，则对configvarbase对应的配置项的值进行覆盖
+    // 若找到，则对configvarbase对应的配置项的值进行更新(当前配置集合中没有的项，即便配置文件有，也不进行覆盖)
     if (var) {
       // 若找到，则具体配置项的参数(val属性)改变为yml文件中配置项的参数
       if (i.second.IsScalar()) {
@@ -53,9 +53,9 @@ void Config::loadFromYaml(const YAML::Node& root) {
   }
 }
 
-void Config::visit(std::function<void(ConfigVarBase::ptr)> cb) {
-  RWmutex::ReadLock lock(get_mutex());
-  ConfigVarMap& m = get_datas();
+void Config::Visit(std::function<void(ConfigVarBase::ptr)> cb) {
+  RWmutex::ReadLock lock(GetMutex());
+  ConfigVarMap& m = GetDatas();
   for (auto it = m.begin(); it != m.end(); ++it) {
     cb(it->second);
   }

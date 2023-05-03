@@ -318,21 +318,21 @@ class Config {
 
   // 根据配置名称查询配置项(i.e. ConfigVar)
   template<class T>
-  static typename ConfigVar<T>::ptr lookup(const std::string& name,  // 查找配置名是否在集合中，不在则新建该配置项(配置名+参数值)
+  static typename ConfigVar<T>::ptr Lookup(const std::string& name,  // 查找配置名是否在集合中，不在则新建该配置项(配置名+参数值)
       const T& default_val, const std::string& description = "");
 
-  static void loadFromYaml(const YAML::Node& root);                  // 从yaml文件中加载配置参数信息
-  static ConfigVarBase::ptr lookupBase(const std::string& name);     // 查找集合是否有当前配置名对应的配置项
+  static void LoadFromYaml(const YAML::Node& root);                  // 从yaml文件中加载配置参数信息
+  static ConfigVarBase::ptr LookupBase(const std::string& name);     // 查找集合是否有当前配置名对应的配置项
 
-  static void visit(std::function<void(ConfigVarBase::ptr)> cb);     // 用户自定义测试
+  static void Visit(std::function<void(ConfigVarBase::ptr)> cb);     // 用户自定义测试
 
  private:
-  static ConfigVarMap& get_datas() {
+  static ConfigVarMap& GetDatas() {
     // 定义局部静态变量保证声明顺序
     static ConfigVarMap datas;  // 对象间共享，目前系统运行包含的配置项，存储配置名到具体配置项的映射集合
     return datas;
   }
-  static RWmutex& get_mutex() {
+  static RWmutex& GetMutex() {
     static RWmutex s_mutex;
     return s_mutex;
   }
@@ -369,11 +369,11 @@ bool ConfigVar<T, FromStr, ToStr>::fromString(const std::string& val) {
 }
 
 template<class T>
-typename ConfigVar<T>::ptr Config::lookup(const std::string& name,
+typename ConfigVar<T>::ptr Config::Lookup(const std::string& name,
     const T& default_val, const std::string& description) {
-  RWmutex::WriteLock lock(get_mutex());
-  auto it = get_datas().find(name);
-  if (it != get_datas().end()) {
+  RWmutex::WriteLock lock(GetMutex());
+  auto it = GetDatas().find(name);
+  if (it != GetDatas().end()) {
     // 存在
     auto tmp = std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
     if (tmp) {
@@ -399,7 +399,7 @@ typename ConfigVar<T>::ptr Config::lookup(const std::string& name,
   }
   // 不存在，新建配置名和配置项指针的映射并放入datas_集合中。保证配置模块定义即可用的特性
   typename ConfigVar<T>::ptr v(new ConfigVar<T>(name, default_val, description));
-  get_datas()[name] = v;  // 以数组的方式插入哈希表中
+  GetDatas()[name] = v;  // 以数组的方式插入哈希表中
   return v;
 }
 

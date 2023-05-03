@@ -29,7 +29,7 @@ int main() {
 
   // MOKA_LOG_FMT_ERROR(logger, "test macro fmt debug %s", "aa");
   
-  auto l = moka::LoggerMgr::get_instance()->get_logger("xx");
+  auto l = moka::LoggerMgr::GetInstance()->get_logger("xx");
   MOKA_LOG_INFO(l) << "xxx";
   return 0;
 }
