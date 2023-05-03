@@ -11,6 +11,7 @@ static Logger::ptr g_logger = MOKA_LOG_NAME("system");
 static std::atomic<uint64_t> s_fiber_id {0};
 static std::atomic<uint64_t> s_fiber_count {0};
 
+// 用于保存协程的上下文信息
 static thread_local Fiber* t_fiber = nullptr;               // 标记当前执行的协程
 static thread_local Fiber::ptr t_thread_fiber = nullptr;    // 标记主协程
 
@@ -77,7 +78,7 @@ Fiber::~Fiber() {
   MOKA_LOG_DEBUG(g_logger) << "Fiber::~Fiber id = " << id_;
 }
 
-// 回收协程的栈资源，使用该栈资源和传入的参数初始化新的协程
+// 回收协程的栈资源(重复利用)，使用该栈资源和传入的参数初始化新的协程
 void Fiber::reset(std::function<void()> cb) {
   MOKA_ASSERT(stack_);
   // 若当前协程处于以下几种状态即可回收资源
@@ -94,7 +95,7 @@ void Fiber::reset(std::function<void()> cb) {
 }
 
 // 调度执行当前协程
-void Fiber::shed() {
+void Fiber::sched() {
   SetThis(this);     // 标记当前执行协程的变量设置为当前协程
   MOKA_ASSERT(state_ != EXEC);
   state_ = EXEC;     // 切换为执行态

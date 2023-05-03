@@ -28,7 +28,7 @@ class Fiber : public std::enable_shared_from_this<Fiber> {
   ~Fiber();
 
   void reset(std::function<void()> cb);  // 重置协程状态(在INIT，TERM状态时重置)
-  void shed();                           // 调度子协程执行
+  void sched();                           // 调度子协程执行
   void yield();                          // 子协程让出执行权(辅助方法)
   uint64_t get_fiber_id() { return id_; }
  
