@@ -37,7 +37,7 @@ void* Thread::Run(void* arg) {
   std::function<void()> cb;
   cb.swap(thread->cb_);  // TODO:智能指针的问题?
 
-  thread->sem_.post();   // 保证顺序，确保线程创建成功后线程已经run起来了
+  thread->sem_.post();   // 确保线程运行起来(Run)时，线程初始化成员变量成功
 
   cb();  // 调用回调函数
   return nullptr;
@@ -52,6 +52,7 @@ Thread::Thread(std::function<void()> cb, const std::string& name)
   // 新建线程，成功返回0
   // 新创建的线程执行函数run
   int ret = pthread_create(&thread_, nullptr, Run, this);  // run是static函数，需要传入this
+  MOKA_LOG_DEBUG(g_logger) << "Thread::Thread " << name_;
   if (ret) {
     MOKA_LOG_ERROR(g_logger) << "pthread_create thread fail , ret = " << ret
                              << " name=" << name;
@@ -61,8 +62,10 @@ Thread::Thread(std::function<void()> cb, const std::string& name)
 }
 
 Thread::~Thread() {
+  // 保证线程对象在析构时自动回收资源
   if (thread_) {
     pthread_detach(thread_);
+    MOKA_LOG_DEBUG(g_logger) << "Thread::~Thread " << id_;
   }
 }
 

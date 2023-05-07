@@ -582,7 +582,7 @@ moka::ConfigVar<std::set<LogDefine>>::ptr g_log_defines =
 
 struct LogIniter {
   LogIniter() {
-    // 注册初始化log配置更改的回调函数，从LogDefine结构体中读出对应的信息，更改logger类属性值
+    // 注册初始化log配置更改的回调函数，从新的LogDefine结构体中读出对应的信息，再更改logger类属性值
     g_log_defines->addListener(0xF1E231, [](const std::set<LogDefine>& old_val,
       const std::set<LogDefine>& new_val) {
       // 这里logger转换为std::string需要

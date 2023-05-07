@@ -18,11 +18,11 @@ void test_fiber() {
     MOKA_LOG_INFO(g_logger) << "main begin";
     moka::Fiber::ptr fiber(new moka::Fiber(run_in_fiber));  // 新建子协程
     fiber->reset(run_in_fiber);  // 测试回收资源的方法
-    fiber->shed();  // 调度执行当前子协程
+    fiber->sched();  // 调度执行当前子协程
     MOKA_LOG_INFO(g_logger) << "main after shed";
-    fiber->shed();  // 调度执行子协程
+    fiber->sched();  // 调度执行子协程
     MOKA_LOG_INFO(g_logger) << "main after end";
-    fiber->shed();
+    fiber->sched();
     // 测试引用计数
     // std::weak_ptr<moka::Fiber> ptr(fiber);
     // MOKA_LOG_DEBUG(g_logger) << ptr.use_count();
