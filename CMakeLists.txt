@@ -18,6 +18,7 @@ set(LIB_SRC                             # 设置变量
   moka/thread.cc
   moka/fiber.cc
   moka/scheduler.cc
+  moka/iomanager.cc
 )
 
 add_library(moka SHARED ${LIB_SRC})     # 添加名为libmoka.so的动态库，再指定生成库的源文件
@@ -46,6 +47,10 @@ target_link_libraries(test_fiber moka ${YAMLCPP})
 add_executable(test_scheduler tests/test_scheduler.cc)     
 add_dependencies(test_scheduler moka)             
 target_link_libraries(test_scheduler moka ${YAMLCPP})
+
+add_executable(test_iomanager tests/test_iomanager.cc)     
+add_dependencies(test_iomanager moka)             
+target_link_libraries(test_iomanager moka ${YAMLCPP})
 
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)  # 设置可执行文件的生成位置，这里设置为bin目录下
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)     # 设置库文件的生成位置(方便去找)

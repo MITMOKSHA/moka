@@ -110,20 +110,15 @@ void Scheduler::stop() {
     MOKA_ASSERT(GetThis() != this);
   }
 
-  // 若当前线程的调度器存在调度协程(使用caller线程作为调度线程)，则执行以下操作
-  // 即不像上述一样创建新的线程进行调度
-  // use caller
+  // 保证没有任务就会停止
+  is_stopping_ = true;  // 经过测试stop必须放在这个位置
+
+  // 若当前线程的调度器存在调度协程(使用caller线程作为调度线程)
   if (caller_sched_fiber_) {
     caller_sched_fiber_->sched();  // 当前运行start函数的上下文为主协程
-    MOKA_LOG_DEBUG(g_logger) << "call out " << caller_sched_fiber_->get_state();
+    // MOKA_LOG_DEBUG(g_logger) << "call out " << caller_sched_fiber_->get_state();
   }
 
-  // 这里一定要join等待执行任务结束后再stop结束
-  for (auto& i : thread_pool_) {
-    i->join();
-  }
-
-  is_stopping_ = true;
   // 等待其他调度线程的调度协程退出调度
   for (size_t i = 0; i < thread_nums_; ++i) {
     notify();  // 使线程唤醒，结束资源
@@ -133,6 +128,11 @@ void Scheduler::stop() {
   if (caller_sched_fiber_) {
     // 等待caller线程的调度协程返回
     notify();
+  }
+
+  // 这里一定要join等待执行调度线程执行任务结束后再stop结束
+  for (auto& i : thread_pool_) {
+    i->join();
   }
 }
 
@@ -144,11 +144,9 @@ void Scheduler::run() {
 
   // 保证run的上下文为调度协程
   if (moka::GetThreadId() != this->thread_id_) {
-    // 若没有使用caller线程(调度器的thread_id为-1)，则以主协程为调度协程
+    // 若没有使用caller线程(调度器的thread_id为-1)，则新建主协程作为调度协程
     // 若使用了caller线程作为调度器的调度线程，则其他新建的线程的id肯定不等于调度线程的id
-    // 因此会使用主协程作为调度协程
 
-    // 若当前线程是以主协程为调度协程，则设置主协程为调度协程
     // 新建的线程run起来的时候还没有创建协程，因此GetThis返回的是新建的主协程
     t_sched_fiber = Fiber::GetThis().get();
   }
@@ -218,6 +216,7 @@ void Scheduler::run() {
       } else {
         cb_fiber.reset(new Fiber(task.cb));
       }
+      // 按值传参后需要reset一下将引用计数减1
       task.reset();
 
       cb_fiber->call();
@@ -225,6 +224,7 @@ void Scheduler::run() {
 
       if (cb_fiber->get_state() == Fiber::READY) {
         schedule(cb_fiber);
+        // 按值传参后需要reset一下将引用计数减1
         cb_fiber.reset();  // 释放协程(调用析构函数)
       } else if (cb_fiber->get_state() == Fiber::TERM
               || cb_fiber->get_state() == Fiber::EXCEPT) {
@@ -278,7 +278,9 @@ void Scheduler::idle() {
   MOKA_LOG_INFO(g_logger) << "idle";
   // TODO:需要在I/O协程调度模块进行完善(只有在调度器停止时idle才结束，没有任务时idle也不结束)
   while (!stopping()) {
+    // 忙等待
     // 这里将idle协程的状态改为了hold，并从当前协程的上下文切换到调度协程的上下文
+    // 这里直接跳过了MainFunc中将idle fiber状态设置为TERM的语句
     moka::Fiber::YieldToHoldSched();
   }
 }

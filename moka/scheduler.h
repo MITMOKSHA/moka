@@ -61,11 +61,15 @@ class Scheduler {
   }
 
  protected:
+  // 这三个虚函数实际上都需要到IO协程调度器中完善
   virtual void notify();
   virtual bool stopping();
   virtual void idle();     // 协程idle
+
   void run();              // 调度协程执行的函数
   void set_this();
+  bool hasIdleThreads() { return idle_thread_nums_ > 0; }
+  
 
  private:
   // 无锁版本，使用FiberOrCb模板参数将函数和协程统一起来，构造任务时会调用对应的调度器构造函数
@@ -90,10 +94,10 @@ class Scheduler {
     // 协程
     ScheduleTask(Fiber::ptr f, pid_t id) : fiber(f), thread_id(id) {}
     // 调用swap成员赋值智能指针，两个操作数的引用计数不会增加
-    ScheduleTask(Fiber::ptr* f, pid_t id) : thread_id(id) { fiber.swap(*f); }
+    ScheduleTask(Fiber::ptr* f, pid_t id) : thread_id(id) { fiber = std::move(*f); }
     // 函数
     ScheduleTask(std::function<void()> f, pid_t id) : cb(f), thread_id(id) {}
-    ScheduleTask(std::function<void()>* f, pid_t id) : thread_id(id) { cb.swap(*f); }
+    ScheduleTask(std::function<void()>* f, pid_t id) : thread_id(id) { cb = std::move(*f); }
 
     // 重置
     void reset() {

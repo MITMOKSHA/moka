@@ -46,7 +46,7 @@ Fiber::Fiber() {
 
 // 初始化任务协程/调度协程
 // 若使用caller，则将子协程返回link到调度协程
-// back参数表示协程执行结束后link到的位置(主协程or调度协程)，默认为主协程
+// back参数表示协程执行结束后link到的位置(主协程or调度协程)，默认为调度协程
 Fiber::Fiber(std::function<void()> cb, bool back, size_t stacksize)
     : id_ (++s_fiber_id), cb_(cb) {
   ++s_fiber_count;

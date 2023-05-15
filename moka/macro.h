@@ -4,6 +4,7 @@
 #include <string.h>
 #include <assert.h>
 #include "util.h"
+#include "log.h"
 
 // 封装assert的宏
 #define MOKA_ASSERT(x) \
