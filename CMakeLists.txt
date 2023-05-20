@@ -19,6 +19,7 @@ set(LIB_SRC                             # 设置变量
   moka/fiber.cc
   moka/scheduler.cc
   moka/iomanager.cc
+  moka/timer.cc
 )
 
 add_library(moka SHARED ${LIB_SRC})     # 添加名为libmoka.so的动态库，再指定生成库的源文件

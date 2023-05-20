@@ -2,10 +2,11 @@
 #define __MOKA_IOMANAGER_H__
 
 #include "scheduler.h"
+#include "timer.h"
 
 namespace moka {
 
-class IOManager: public Scheduler {
+class IOManager: public Scheduler, public TimerManager {
  public:
   using ptr = std::shared_ptr<IOManager>;
 
@@ -56,8 +57,10 @@ class IOManager: public Scheduler {
   virtual void notify() override; 
   virtual bool stopping() override;
   virtual void idle() override;
+  virtual void onTimerInsertedAtFront() override;
 
   void contextResize(size_t size);
+  bool stopping(uint64_t& timeout);
 
  private:
   int epfd_ = 0;

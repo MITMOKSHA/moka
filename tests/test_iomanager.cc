@@ -41,13 +41,28 @@ void test_fiber() {
   moka::IOManager::GetThis()->cancelEvent(sockfd, moka::IOManager::READ);
 }
 
+moka::Timer::ptr s_timer;
+void test_timer() {
+  moka::IOManager iom(2, false);
+  s_timer = iom.addTimer(2000, []() {
+    MOKA_LOG_INFO(g_logger) << "hello timer!";
+    static int i = 0;
+    if (++i == 3) {
+      // s_timer->reset(1000, false);
+      s_timer->cancel();
+      // s_timer->refresh();
+    }
+  }, true);
+}
+
 void test1() {
-  moka::IOManager iom(1, true, "t");
+  moka::IOManager iom(3, true, "t");
   iom.schedule(test_fiber);
   // iom析构时会调用stop，join阻塞等待调度协程执行任务结束
 }
 
 int main(int argc, char** argv) {
-  test1();
+  // test1();
+  test_timer();
   return 0;
 }

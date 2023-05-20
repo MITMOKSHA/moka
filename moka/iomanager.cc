@@ -279,8 +279,15 @@ void IOManager::notify() {
 
 bool IOManager::stopping() {
   // 保证协程完成调度，同时IO事件也要完成调度
-  return Scheduler::stopping() && 
-        pending_event_counts_ == 0;
+  uint64_t timeout = 0;
+  return stopping(timeout);
+}
+  
+bool IOManager::stopping(uint64_t& timeout) {
+  timeout = get_expire();
+  return timeout == UINT64_MAX &&
+         pending_event_counts_ == 0 &&
+         Scheduler::stopping();
 }
 
 void IOManager::idle() {
@@ -293,80 +300,99 @@ void IOManager::idle() {
     delete[] ptr;
   });
 
-  if (stopping()) {
-    MOKA_LOG_INFO(g_logger) << "name=" << Scheduler::get_name() << " idle stopping exit";
-    return;
-  }
-  int ret = 0;
-  do {
-    // epoll超时时间(毫秒级)
-    static const int MAX_TIMEOUT = 5000;
-    // 监听epoll事件数组(第二个参数作为out参数)，成功时返回就绪fd的个数
-    ret = epoll_wait(epfd_, events, 64, MAX_TIMEOUT);
-    MOKA_LOG_DEBUG(g_logger) << "ret=" << ret;
-    if (ret < 0 && errno == EINTR) {
-    } else {
+  while (true) {
+    uint64_t next_timeout = 0;
+    if (stopping(next_timeout)) {
+      MOKA_LOG_INFO(g_logger) << "name=" << Scheduler::get_name() << " idle stopping exit";
       break;
     }
 
-  } while (true);
-  for (int i = 0; i < ret; ++i) {
-    // 遍历就绪fd
-    epoll_event& event = events[i];
-    if (event.data.fd == notify_fds_[0]) {
-      // 外部有消息notify的
-      uint8_t dummy;
-      // ET
-      while (read(notify_fds_[0], &dummy, 1) == 1);
-      continue;
+    int ret = 0;
+    do {
+      // epoll超时时间(毫秒级)
+      static const int MAX_TIMEOUT = 3000;
+      // 监听epoll事件数组(第二个参数作为out参数)，成功时返回就绪fd的个数
+      if (next_timeout != UINT64_MAX) {
+        // 有超时时间，取间隔短的那一个
+        next_timeout = (int)next_timeout > MAX_TIMEOUT? MAX_TIMEOUT: next_timeout; 
+      } else {
+        next_timeout = MAX_TIMEOUT;
+      }
+      ret = epoll_wait(epfd_, events, 64, (int)next_timeout);
+      // MOKA_LOG_DEBUG(g_logger) << "ret=" << ret;
+      if (ret < 0 && errno == EINTR) {
+      } else {
+        break;
+      }
+    } while (true);
+
+    std::vector<std::function<void()>> cbs;    
+    listExpiredCb(cbs);
+    if (!cbs.empty()) {
+      schedule(cbs.begin(), cbs.end());
+      cbs.clear();
     }
-    // 取出文件描述符的上下文
-    FdContext* fd_ctx = static_cast<FdContext*>(event.data.ptr);
-    Mutex::LockGuard lock(fd_ctx->mutex);
-    if (event.events & (EPOLLERR | EPOLLHUP)) {
-      // 错误或中断
-      event.events |= EPOLLIN | EPOLLOUT;
-    } 
-    int real_events = NONE;
-    if (event.events & EPOLLIN) {
-      real_events |= READ;
+
+    for (int i = 0; i < ret; ++i) {
+      // 遍历就绪fd
+      epoll_event& event = events[i];
+      if (event.data.fd == notify_fds_[0]) {
+         // 外部有消息notify的
+        uint8_t dummy;
+        // ET
+        while (read(notify_fds_[0], &dummy, 1) == 1);
+        continue;
+      }
+      // 取出文件描述符的上下文
+      FdContext* fd_ctx = static_cast<FdContext*>(event.data.ptr);
+      Mutex::LockGuard lock(fd_ctx->mutex);
+      if (event.events & (EPOLLERR | EPOLLHUP)) {
+        // 错误或中断
+        event.events |= EPOLLIN | EPOLLOUT;
+      } 
+      int real_events = NONE;
+      if (event.events & EPOLLIN) {
+        real_events |= READ;
+      }
+      if (event.events & EPOLLOUT) {
+        real_events |= WRITE;
+      }
+      if ((fd_ctx->events & real_events) == NONE) {
+        // 没有事件发生
+        continue;
+      }
+      // 剩余事件(将处理的事件从fd对应的epoll内核事件表中删除)
+      int left_events = (fd_ctx->events & (~real_events));
+      int op = left_events? EPOLL_CTL_MOD: EPOLL_CTL_DEL;
+      // 复用epoll监听剩余事件
+      event.events = EPOLLET | left_events;
+      
+      int ret2 = epoll_ctl(epfd_, op, fd_ctx->fd, &event);
+      if (ret2) {
+        MOKA_LOG_ERROR(g_logger) << "epoll_ctl(" << epfd_ << ", "
+                                << op << ", " << fd_ctx->fd << ", " << event.events << "):"
+                                << ret << " (" << errno << ") (" << strerror(errno) << ")";
+        continue;
+      }
+      // 这里可能两个事件同时触发，没用else
+      if (real_events & READ) {
+        fd_ctx->trigger(READ);
+        --pending_event_counts_;
+      }
+      if (real_events & WRITE) {
+        fd_ctx->trigger(WRITE);
+        --pending_event_counts_;
+      }
     }
-    if (event.events & EPOLLOUT) {
-      real_events |= WRITE;
-    }
-    if ((fd_ctx->events & real_events) == NONE) {
-      // 没有事件发生
-      continue;
-    }
-    // 剩余事件(将处理的事件从fd对应的epoll内核事件表中删除)
-    int left_events = (fd_ctx->events & (~real_events));
-    int op = left_events? EPOLL_CTL_MOD: EPOLL_CTL_DEL;
-    // 复用epoll监听剩余事件
-    event.events = EPOLLET | left_events;
-    
-    int ret2 = epoll_ctl(epfd_, op, fd_ctx->fd, &event);
-    if (ret2) {
-      MOKA_LOG_ERROR(g_logger) << "epoll_ctl(" << epfd_ << ", "
-                              << op << ", " << fd_ctx->fd << ", " << event.events << "):"
-                              << ret << " (" << errno << ") (" << strerror(errno) << ")";
-      continue;
-    }
-    // 这里可能两个事件同时触发，没用else
-    if (real_events & READ) {
-      fd_ctx->trigger(READ);
-      --pending_event_counts_;
-    }
-    if (real_events & WRITE) {
-      fd_ctx->trigger(WRITE);
-      --pending_event_counts_;
-    }
+    // 让出执行权给scheduler
+    // 直接回到run事件循环中，在事件循环中被设置为HOLD状态
+    Fiber::ptr cur = Fiber::GetThis();
+    cur->back();
   }
-  // 让出执行权给schedulerTODO:这里可以不用while循环
-  // Fiber::ptr cur = Fiber::GetThis();
-  // // auto raw_ptr = cur.get();
-  // // cur.reset();
-  // // raw_ptr->back();
-  // // 直接回到run事件循环中，在事件循环中被设置为HOLD状态
+}
+
+void IOManager::onTimerInsertedAtFront() {
+  notify();  // 往管道中写，立即唤醒epoll_wait
 }
 
 }
