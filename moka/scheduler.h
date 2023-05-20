@@ -45,14 +45,16 @@ class Scheduler {
   }
 
   // 往调度器中添加任务(保存到任务队列中)，但不立刻执行
+  // 使用范围迭代器添加STL中的任务
   template<class InputIterator>
   void schedule(InputIterator begin, InputIterator end) {
     bool need_notify = false;
     {
       Mutex::LockGuard lock(mutex_);
       while (begin != end) {
-        // 仅需要在一开始往任务队列中添加任务时notify
-        need_notify = scheduleNoLock(&(*begin)) || need_notify;
+        // 仅需要在一开始往任务队列中添加任务时notify，-1表示任意线程
+        need_notify = scheduleNoLock(&(*begin), -1) || need_notify;
+        ++begin;
       }
     }
     if (need_notify) {
