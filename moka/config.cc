@@ -18,13 +18,15 @@ static void listAllMember(const std::string& prefix,
     MOKA_LOG_ERROR(MOKA_LOG_ROOT()) << "Config invalid name: " << prefix << " : " << node;
   }
   output.push_back(std::make_pair(prefix, node));
-  if (node.IsMap()) {  // 解析yaml中的字典类型
+  if (node.IsMap()) {
+    // 只将字典类型的yaml展开放入到output中
     for (auto it = node.begin(); it != node.end(); ++it) {
       listAllMember(prefix.empty()? it->first.Scalar():
                     prefix + "." + it->first.Scalar(), it->second, output);
     }
   }
 }
+
 void Config::LoadFromYaml(const YAML::Node& root) {
   std::list<std::pair<std::string, const YAML::Node>> all_nodes;
   listAllMember("", root, all_nodes);
@@ -41,16 +43,20 @@ void Config::LoadFromYaml(const YAML::Node& root) {
     
     // 若找到，则对configvarbase对应的配置项的值进行更新(当前配置集合中没有的项，即便配置文件有，也不进行覆盖)
     if (var) {
-      // 若找到，则具体配置项的参数(val属性)改变为yml文件中配置项的参数
       if (i.second.IsScalar()) {
+        // 如果该节点是标量
         var->fromString(i.second.Scalar());
       } else {
+        // 如果不是标量类型则直接通过字符串流获取缓冲区内容输出
         std::stringstream ss;
         ss << i.second;
         var->fromString(ss.str());
       }
     }
   }
+  // for (auto i : GetDatas()) {
+  //   MOKA_LOG_INFO(MOKA_LOG_ROOT()) << i.first;
+  // }
 }
 
 void Config::Visit(std::function<void(ConfigVarBase::ptr)> cb) {

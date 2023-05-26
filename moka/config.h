@@ -233,7 +233,7 @@ class ConfigVarBase {
   const std::string& get_description() const { return description_; }
 
   virtual std::string toString() = 0;
-  virtual bool fromString(const std::string& val) = 0;   // 解析字符串
+  virtual bool fromString(const std::string& val) = 0;   // 解析成字符串
   virtual const std::string get_typename() const = 0;
 
  private:
@@ -300,6 +300,7 @@ class ConfigVar : public ConfigVarBase {
     RWmutex::WriteLock lock(mutex_);
     cbs_.clear();
   }
+
   chan_cb get_listener(uint64_t key) {
     RWmutex::ReadLock lock(mutex_);
     return cbs_.find(key) == cbs_.end()? nullptr: cbs_[key];
@@ -311,7 +312,7 @@ class ConfigVar : public ConfigVarBase {
   std::map<uint64_t, chan_cb> cbs_;  // 变更回调函数集合(使用map类型可以通过key来操作)
 };
 
-// ConfigVarBase管理类(单例模式)
+// 配置项管理类(单例模式)
 class Config {
  public:
   using ConfigVarMap = std::unordered_map<std::string, ConfigVarBase::ptr>;  // 配置名是唯一的
@@ -324,7 +325,7 @@ class Config {
   static void LoadFromYaml(const YAML::Node& root);                  // 从yaml文件中加载配置参数信息
   static ConfigVarBase::ptr LookupBase(const std::string& name);     // 查找集合是否有当前配置名对应的配置项
 
-  static void Visit(std::function<void(ConfigVarBase::ptr)> cb);     // 用户自定义测试
+  static void Visit(std::function<void(ConfigVarBase::ptr)> cb);     // 用户自定义测试(测试配置项集合所有配置项的相关信息)
 
  private:
   static ConfigVarMap& GetDatas() {
@@ -383,9 +384,9 @@ typename ConfigVar<T>::ptr Config::Lookup(const std::string& name,
     } else {
       // 强转失败(同名key对应的值类型不同则会强转失败)
       MOKA_LOG_ERROR(MOKA_LOG_ROOT()) << "lookup name=" << name
-                                      << "exist but type not " 
-                                      << typeid(T).name() << " real type is " 
-                                      << it->second->get_typename() << " "
+                                      << " exist but type is not " 
+                                      << typeid(T).name() << ", real type is " 
+                                      << it->second->get_typename() << " and value is"
                                       << it->second->toString();
       return nullptr;
     }

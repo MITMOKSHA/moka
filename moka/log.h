@@ -13,11 +13,12 @@
 #include <vector>
 #include <functional>
 #include <unordered_map>
+
 #include "util.h"
 #include "singleton.h"
 #include "thread.h"
 
-// 测试宏
+// 测试宏(get_ss()返回当前event的stringstream类，用于流式输出字符串缓冲区的内容)
 #define MOKA_LOG_LEVEL(logger, level) \
   if(logger->get_level() <= level) \
     moka::LogEventWrap(moka::LogEvent::ptr(new moka::LogEvent(__FILE__, 0, __LINE__, moka::GetThreadId(), \
@@ -49,7 +50,6 @@ namespace moka {
 
 
 class Logger;
-class LoggerMananger;
 
 // 日志级别
 class LogLevel {
@@ -81,7 +81,7 @@ class LogEvent {
   uint32_t get_thread_id() { return thread_id_; }
   uint32_t get_fiber_id() { return fiber_id_; }
   const std::string& get_thread_name() const { return thread_name_; }
-  uint32_t get_timestamp_() { return timestamp_; }
+  time_t get_timestamp() { return timestamp_; }
   const std::string get_content() const { return ss_.str(); }
   LogLevel::level get_level() { return level_; }
   std::shared_ptr<Logger> get_logger() { return logger_; }
@@ -96,8 +96,8 @@ class LogEvent {
   uint32_t thread_id_ = 0;                     // 线程id
   uint32_t fiber_id_ = 0;                      // 协程id
   std::string thread_name_;                    // 线程名
-  uint64_t timestamp_ = 0;                     // 时间戳
-  std::stringstream ss_;                       // 文件内容
+  time_t timestamp_ = 0;                       // 时间戳
+  std::stringstream ss_;                       // 用于流式输出的内容
   std::shared_ptr<Logger> logger_;             // 日志器
   LogLevel::level level_;                      // 日志级别(这里不能直接用日志器的level，前向声明不支持)
 };
@@ -165,7 +165,8 @@ class Logger {
   using ptr = std::shared_ptr<Logger>;
   Logger(const std::string& name = "root");
 
-  void log(LogLevel::level level_, LogEvent::ptr event);  // 判断该日志事件级别高于日志器本身则调用Appender的log函数将日志输出
+  // 传入日志事件的级别，和日志事件
+  void log(LogLevel::level level, LogEvent::ptr event);  // 判断该日志事件级别高于日志器本身则调用Appender的log函数将日志输出
   void debug(LogEvent::ptr event);
   void info(LogEvent::ptr event);
   void warn(LogEvent::ptr event);
@@ -233,6 +234,7 @@ class LoggerManager {
   Logger::ptr root_;  // 根日志
 };
 
+// 日志器管理类的单例别名
 using LoggerMgr = moka::Singleton<LoggerManager>;
 
 class MessageFormatItem : public LogFormatter::FormatterItem {
@@ -303,13 +305,14 @@ class DateTimeFormatItem : public LogFormatter::FormatterItem {
   DateTimeFormatItem(const std::string& format = "%Y-%m-%d %H:%M:%S")
     : format_(format) {
       if (format_.empty()) {
+        // 若格式符%d后没有给出指定的日期格式，则默认为下列格式
         format_ = "%Y-%m-%d %H:%M:%S";
       }
     }
   virtual void format(std::ostream& os, LogEvent::ptr event) override {
     struct tm* tmp;
     char buf[64];
-    time_t t = event->get_timestamp_();
+    time_t t = event->get_timestamp();
     tmp = localtime(&t);
     strftime(buf, sizeof(buf), format_.c_str(), tmp);
     os << buf;

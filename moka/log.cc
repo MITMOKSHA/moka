@@ -65,7 +65,7 @@ void LogEvent::format(const char* fmt, va_list al) {
   int len = vasprintf(&buf, fmt, al);  // 动态分配一段空间(以'\0'结尾)，将起始地址传递给buf参数
   // 返回-1表示内存空间不可用或错误；成功时返回打印的字节数
   if (len != -1) {
-    ss_ << std::string(buf, len);  // 输出字符串到LogEvent的ss字符串缓冲区中
+    ss_ << std::string(buf, len);  // 将字符串放入LogEvent的ss字符串缓冲区中以便输出
     free(buf);                     // 释放空间
   }
 }
@@ -145,7 +145,7 @@ void Logger::fatal(LogEvent::ptr event) {
 void Logger::addAppender(LogAppender::ptr appender) {
   Spinlock::LockGuard lock(mutex_);
   if (!(appender->has_fmt())) {
-    // 如果没有formatter则把当前日志器的formatter给它
+    // 如果没有指定格式串则把当前日志器的格式串给日志输出器
     appender->set_formatter(formatter_, false);  // false表示appender用的是日志器的fmt
   }
   appenders_.push_back(appender);
@@ -205,8 +205,8 @@ std::string Logger::toYamlString() {
 
 void Logger::updateAppenderFmt() {
   for (auto& i : appenders_) {
-    // 若该appender继承日志器的fmt，则更新它
     if (!(i->has_fmt())) {
+      // 若该appender没有自己的格式串，则将其初始化为日志器的格式串
       i->set_formatter(formatter_, false);
     }
   }
@@ -236,7 +236,7 @@ std::string StdoutLogAppender::toYamlString() {
 
 FileLogAppender::FileLogAppender(const std::string filename)
     : filename_(filename) {  // 冒号前空4行(style)
-    reopen();
+  reopen();
 }
 
 void FileLogAppender::log(LogLevel::level level, LogEvent::ptr event) {
@@ -321,10 +321,11 @@ void LogFormatter::init() {
     }
     // 此时i指向'%'
     size_t n = i + 1;
-    int fmt_status = 0;  // 状态机状态号
+    int fmt_status = 0;  // 状态机状态号(1表示正在解析，0表示结束解析)
     std::string str;     // 暂存格式符
-    std::string fmt;     // 暂存解析到的格式
+    std::string fmt;     // 暂存括号内解析到的格式
     size_t fmt_begin_idx = 0;
+    // 解析大括号内的格式符(如%d后跟的日期格式符)
     while (n < pattern_.size()) {
       if (!fmt_status && !isalpha(pattern_[n]) && pattern_[n] != '{' &&
           pattern_[n] != '}') {
@@ -335,7 +336,7 @@ void LogFormatter::init() {
       if (fmt_status == 0) {
         if (pattern_[n] == '{') {
           str = pattern_.substr(i+1, n-i-1);
-          fmt_status = 1; // 解析格式
+          fmt_status = 1; // 进入解析状态
           fmt_begin_idx = n;
           ++n;
           continue;
@@ -343,8 +344,9 @@ void LogFormatter::init() {
       }
       if (fmt_status == 1) {
         if (pattern_[n] == '}') {
+          // 将大括号内的字符放入fmt中
           fmt = pattern_.substr(fmt_begin_idx+1, n-fmt_begin_idx-1);
-          fmt_status = 0; // 解析格式
+          fmt_status = 0; // 结束解析状态
           ++n;
           break;
         }
@@ -356,15 +358,16 @@ void LogFormatter::init() {
         }
       }
     }
-    // 处理nstr
     if (fmt_status == 0) {
       if (!nstr.empty()) {
+        // std::string()默认创建一个空对象
         vec.push_back(std::make_tuple(nstr, std::string(), 0));
         nstr.clear();  // 放入之后清空容器
       }
       vec.push_back(std::make_tuple(str, fmt, 1));
       i = n - 1;
     } else if (fmt_status == 1) {
+      // 解析完大括号内的内容还处于解析状态，说明error
       std::cout << "pattern parse error: " << pattern_ << "-"
                 << pattern_.substr(i) << std::endl;
       error_ = true;
@@ -380,7 +383,7 @@ void LogFormatter::init() {
   // 宏对应lambda表达式
 #define XX(str, C) \
     {#str, [](const std::string& fmt){ return FormatterItem::ptr(new C(fmt));}} 
-
+        // 调用XX宏，XX宏展开为pair类型
         XX(m, MessageFormatItem),
         XX(p, LevelFormatItem),
         XX(r, ElapseFormatItem),
@@ -396,17 +399,18 @@ void LogFormatter::init() {
 #undef XX
   };//   };
   for(auto& i : vec) {  // 遍历tuple数组
-    if(std::get<2>(i) == 0) {  // 若不是格式符
+    if(std::get<2>(i) == 0) {
+      // 若不是格式符，则调用Stingformat使用输出流打印出来
       items_.push_back(FormatterItem::ptr(new StringFormatItem(std::get<0>(i))));
     } else {
-      // 解析对应的格式符，根据哈希表所引导具体的item执行lambda表达式
+      // 查找格式符对应的格式符对象
       auto it = s_format_items.find(std::get<0>(i));
       if(it == s_format_items.end()) {
-        // 若未解析到对应的格式符(除格式符以外的字符)，则调用stingformat使用输出流打印出来
+        // 若不存在该格式符类型，则输出error
         items_.push_back(FormatterItem::ptr(new StringFormatItem("<<error_format %" + std::get<0>(i) + ">>")));
         error_ = true;
       } else {
-        items_.push_back(it->second(std::get<1>(i)));  // 调用对应的函数(传入fmt)
+        items_.push_back(it->second(std::get<1>(i)));  // 将对应格式符类型的对象放入items数组中
       }
     }
     // DEBUG
@@ -446,12 +450,12 @@ std::string LoggerManager::toYamlString() {
   return ss.str();
 }
 
-// 日志输出器配置
+// 日志输出器结构
 struct LogAppenderDefine {
-  int type = 0;  // 1 File 2 Stdout
+  int type = 0;  // 1 File 2 Stdout，根据该标识来决定输出到文件/终端
   LogLevel::level level = LogLevel::UNKNOW;
-  std::string formatter;
-  std::string file;
+  std::string formatter;   // 输出器的格式器
+  std::string file;        // 文件名称
 
   bool operator==(const LogAppenderDefine& oth) const {
     return type == oth.type &&
@@ -461,12 +465,12 @@ struct LogAppenderDefine {
   }
 };
 
-// 日志配置类，用于读取yaml文件数据的过渡
+// 日志结构，用于读取yaml文件数据的过渡
 struct LogDefine {
-  std::string name;
-  LogLevel::level level = LogLevel::UNKNOW;
-  std::string formatter;
-  std::vector<LogAppenderDefine> appenders;
+  std::string name;                              // 日志器名称
+  LogLevel::level level = LogLevel::UNKNOW;      // 日志级别
+  std::string formatter;                         // 日志格式串
+  std::vector<LogAppenderDefine> appenders;      // 输出地集合
 
   bool operator==(const LogDefine& oth) const {
     return name == oth.name &&
@@ -474,6 +478,7 @@ struct LogDefine {
            formatter == oth.formatter &&
            appenders == oth.appenders;
   }
+  // 因为要使用到set::find，在find过程中需要比较，因此需要重载<
   bool operator<(const LogDefine& oth) const {
     return name < oth.name;
   }
@@ -485,12 +490,14 @@ class LexicalCast<std::string, LogDefine> {
 public:
     LogDefine operator()(const std::string& v) {
         YAML::Node n = YAML::Load(v);
+        // 使用yaml配置文件的内容初始化日志结构
         LogDefine ld;
         if(!n["name"].IsDefined()) {
             std::cout << "log config error: name is null, " << n
                       << std::endl;
             throw std::logic_error("log config name is null");
         }
+        // 直接可以完成转型
         ld.name = n["name"].as<std::string>();
         // YAML的as函数只支持基本类型的转换，转换成string之后再通过LogLevel的fromString转换为LogLevel对象
         ld.level = LogLevel::FromString(n["level"].IsDefined()? n["level"].as<std::string>() : "");
@@ -509,29 +516,32 @@ public:
                     continue;
                 }
                 std::string type = n_a["type"].as<std::string>();
+                // 日志输出器
                 LogAppenderDefine lad;
+                // 根据配置文件信息初始化日志输出器结构
                 if(type == "FileLogAppender") {
-                    lad.type = 1;
-                    if(!n_a["file"].IsDefined()) {
-                        std::cout << "log config error: fileappender file is null, " << n_a
-                              << std::endl;
-                        continue;
-                    }
-                    lad.file = n_a["file"].as<std::string>();
-                    if(n_a["formatter"].IsDefined()) {
-                        lad.formatter = n_a["formatter"].as<std::string>();
-                    }
+                  // 以文件为输出地
+                  lad.type = 1;
+                  if(!n_a["file"].IsDefined()) {
+                      std::cout << "log config error: fileappender file is null, " << n_a
+                            << std::endl;
+                      continue;
+                  }
+                  lad.file = n_a["file"].as<std::string>();
+                  if(n_a["formatter"].IsDefined()) {
+                      lad.formatter = n_a["formatter"].as<std::string>();
+                  }
                 } else if(type == "StdoutLogAppender") {
-                    lad.type = 2;
-                    if(n_a["formatter"].IsDefined()) {
-                        lad.formatter = n_a["formatter"].as<std::string>();
-                    }
+                  // 以终端为输出地
+                  lad.type = 2;
+                  if(n_a["formatter"].IsDefined()) {
+                      lad.formatter = n_a["formatter"].as<std::string>();
+                  }
                 } else {
                     std::cout << "log config error: appender type is invalid, " << n_a
                               << std::endl;
                     continue;
                 }
-
                 ld.appenders.push_back(lad);
             }
         }
@@ -543,69 +553,74 @@ template<>
 class LexicalCast<LogDefine, std::string> {
 public:
     std::string operator()(const LogDefine& i) {
-        YAML::Node n;
-        n["name"] = i.name;
-        if(i.level != LogLevel::UNKNOW) {
-            n["level"] = LogLevel::ToString(i.level);
-        }
-        if(!i.formatter.empty()) {
-            n["formatter"] = i.formatter;
-        }
+      YAML::Node n;
+      n["name"] = i.name;
+      if(i.level != LogLevel::UNKNOW) {
+          n["level"] = LogLevel::ToString(i.level);
+      }
+      if(!i.formatter.empty()) {
+          n["formatter"] = i.formatter;
+      }
 
-        for(auto& a : i.appenders) {
-            YAML::Node n_a;
-            if(a.type == 1) {
-                n_a["type"] = "FileLogAppender";
-                n_a["file"] = a.file;
-            } else if(a.type == 2) {
-                n_a["type"] = "StdoutLogAppender";
-            }
-            if(a.level != LogLevel::UNKNOW) {
-                n_a["level"] = LogLevel::ToString(a.level);
-            }
+      for(auto& a : i.appenders) {
+          YAML::Node n_a;
+          if(a.type == 1) {
+              n_a["type"] = "FileLogAppender";
+              // 如果是文件则初始化文件名
+              n_a["file"] = a.file;
+          } else if(a.type == 2) {
+              n_a["type"] = "StdoutLogAppender";
+          }
+          if(a.level != LogLevel::UNKNOW) {
+              n_a["level"] = LogLevel::ToString(a.level);
+          }
 
-            if(!a.formatter.empty()) {
-                n_a["formatter"] = a.formatter;
-            }
+          if(!a.formatter.empty()) {
+              n_a["formatter"] = a.formatter;
+          }
 
-            n["appenders"].push_back(n_a);
-        }
-        std::stringstream ss;
-        ss << n;
-        return ss.str();
+          n["appenders"].push_back(n_a);
+      }
+      std::stringstream ss;
+      // 将yaml对象输出到字符串流缓冲区中
+      ss << n;
+      // 输出缓冲区的内容
+      return ss.str();
     }
 };
 
-// 全局变量，初始化配置类
+// 全局变量，初始化的日志结构配置项集合
 moka::ConfigVar<std::set<LogDefine>>::ptr g_log_defines =
   moka::Config::Lookup("logs", std::set<LogDefine>(), "logs config");
 
 struct LogIniter {
   LogIniter() {
-    // 注册初始化log配置更改的回调函数，从新的LogDefine结构体中读出对应的信息，再更改logger类属性值
+    // 在main函数初始化前注册log配置更改的事件
+    // 如果日志结构发生更改，即yaml文件中的配置载入到LogDefine结构体中
+    // 则顺势利用日志结构的信息，修改日志器的相关内容，实现日志属性值的更新
     g_log_defines->addListener(0xF1E231, [](const std::set<LogDefine>& old_val,
+      // 事件发生，将日志结构的内容更新到日志模块中
       const std::set<LogDefine>& new_val) {
       // 这里logger转换为std::string需要
       MOKA_LOG_INFO(MOKA_LOG_ROOT()) << "on_logger_conf_changed";
-      // 新增日志
       for (auto log_def : new_val) {
         auto it = old_val.find(log_def);  // 按照LogDefine中重载的<来比较的
         moka::Logger::ptr logger;
         if (it == old_val.end()) {
-          // 新增logger
-          // 等价于logger.reset(new moka::Logger(log_def.name));
+          // 新增日志器
+          // 以下方式在该名称日志器不存在时，可以新建日志器
           logger = MOKA_LOG_NAME(log_def.name);
         } else if (!(log_def == *it)) {
-          // 修改logger
+          // 这里利用之前LogDefine重载的比较运算符进行比较
+          // 修改日志器
           logger = MOKA_LOG_NAME(log_def.name);
         }
-
         logger->set_level(log_def.level);
         if (!(log_def.formatter.empty())) {
           logger->set_formatter(log_def.formatter);
         }
         logger->clearAppenders();
-        // 初始化logger的appender
+        // 初始化logger的appenders集合
         for (auto a : log_def.appenders) {
           moka::LogAppender::ptr ap;
           if (a.type == 1) {
@@ -623,13 +638,16 @@ struct LogIniter {
         }
       }
 
+      // 处理删除的日志器(该日志结构在新的日志结构中不存在)
       for (auto i : old_val) {
+        // 遍历set中的日志结构
         auto it = new_val.find(i);
         if (it == new_val.end()) {
-          // 删除logger
+          MOKA_LOG_DEBUG(MOKA_LOG_ROOT()) << "haha";
           auto logger = MOKA_LOG_NAME(i.name);
-          // 设置一个很高级的level，让日志写入到输出地
+          // 设置一个很高的level，将该日志写入到输出地
           logger->set_level((LogLevel::level)100);
+          // 清空所有的输出地
           logger->clearAppenders();
         }
       }
