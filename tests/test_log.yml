@@ -2,5 +2,5 @@ logs:
     - name: root
       level: info
       appenders:
-          - type: FileLogAppender
-            file: ../tests/mutex.txt
+          - type: StdoutLogAppender
+            file: ../build/mutex.txt
