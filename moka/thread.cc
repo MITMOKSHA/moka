@@ -28,14 +28,14 @@ void Thread::SetName(const std::string& name) {
 void* Thread::Run(void* arg) {
   // 获取this指针赋给thread，因为这是静态方法
   Thread* thread = (Thread*)arg;           // POSIX标准线程函数参数必须是void*，因此需要转型
-  t_thread = thread;                     // 创建线程时初始化局部线程变量
+  t_thread = thread;                       // 创建线程时初始化局部线程变量
   thread->id_ = moka::GetThreadId();
   t_thread_name = thread->name_;
   // 设置线程的名称
   pthread_setname_np(pthread_self(), thread->name_.substr(0, 15).c_str());
 
   std::function<void()> cb;
-  cb.swap(thread->cb_);  // TODO:智能指针的问题?
+  cb.swap(thread->cb_);  // 相当于移动语义
 
   thread->sem_.post();   // 确保线程运行起来(Run)时，线程初始化成员变量成功
 
@@ -64,6 +64,7 @@ Thread::Thread(std::function<void()> cb, const std::string& name)
 Thread::~Thread() {
   // 保证线程对象在析构时自动回收资源
   if (thread_) {
+    // 如果线程资源没有进行释放则标记为可分离的，自动回收该资源
     pthread_detach(thread_);
     MOKA_LOG_DEBUG(g_logger) << "Thread::~Thread " << id_;
   }

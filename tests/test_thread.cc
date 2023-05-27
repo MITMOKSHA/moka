@@ -23,33 +23,54 @@ void func1() {
   }
 }
 
-void func2() {
-  while (true)
-    MOKA_LOG_INFO(g_logger) << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
-}
-
-void func3() {
-  while (true)
-    MOKA_LOG_INFO(g_logger) << "======================================================";
-}
-
-int main(int argc, char** argv) {
-  MOKA_LOG_INFO(g_logger) << "thread test begin";
-  YAML::Node root = YAML::LoadFile("/home/moksha/moka/tests/test_log.yml");
-  moka::Config::LoadFromYaml(root);
-
+void test1() {
   std::vector<moka::Thread::ptr> thread_pool;
-  // 创建线程
   for (int i = 0; i < 2; ++i) {
-    moka::Thread::ptr thr(new moka::Thread(&func2, "name_" + std::to_string(i*2)));
-    moka::Thread::ptr thr2(new moka::Thread(&func3, "name_" + std::to_string(i*2+1)));
+    moka::Thread::ptr thr(new moka::Thread(&func1, "name_" + std::to_string(i)));
     thread_pool.push_back(thr);
-    thread_pool.push_back(thr2);
   }
+  // 阻塞直到两个线程的任务执行完成，保证同步
   for (size_t i = 0; i < thread_pool.size(); ++i)  {
     thread_pool[i]->join();
   }
   MOKA_LOG_INFO(g_logger) << "thread test end";
   MOKA_LOG_INFO(g_logger) << "count=" << count;
+}
+
+int i = 10;
+
+void func2() {
+  while (i-- > 0)
+    MOKA_LOG_INFO(g_logger) << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+}
+
+void func3() {
+  while (i-- > 0)
+    MOKA_LOG_INFO(g_logger) << "======================================================";
+}
+
+
+void test2() {
+  MOKA_LOG_INFO(g_logger) << "thread test begin";
+  // 从配置文件中加载日志配置
+  YAML::Node root = YAML::LoadFile("/home/moksha/moka/tests/test_log.yml");
+  moka::Config::LoadFromYaml(root);
+
+  std::vector<moka::Thread::ptr> thread_pool;
+  // 因为日志已经保证了线程安全，因此每个信息都会完整输出
+  moka::Thread::ptr thr(new moka::Thread(&func2, "name_0"));
+  moka::Thread::ptr thr2(new moka::Thread(&func3, "name_1"));
+  thread_pool.push_back(thr);
+  thread_pool.push_back(thr2);
+
+  for (size_t i = 0; i < thread_pool.size(); ++i)  {
+    thread_pool[i]->join();
+  }
+  MOKA_LOG_INFO(g_logger) << "thread test end";
+}
+
+int main(int argc, char** argv) {
+  // test1();
+  test2();
   return 0;
 }

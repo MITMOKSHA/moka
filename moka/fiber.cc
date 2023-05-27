@@ -34,9 +34,10 @@ class MallocStackAllocator {
 
 using StackAllocator = MallocStackAllocator;
 
-// 创建主协程的构造函数(一个线程只有一个，使用单例模式)
+// 创建主协程的构造函数(一个线程只有一个，私有方法，只能通过GetThis调用)
 Fiber::Fiber() {
   state_ = EXEC;
+  // 新建主协程时，会将当前正在执行的协程设置为主协程
   SetThis(this);
   // 使用当前线程的上下文初始化uc
   MOKA_ASSERT_2(!getcontext(&uc_), "getcontext");
@@ -46,18 +47,18 @@ Fiber::Fiber() {
 
 // 初始化任务协程/调度协程
 // 若使用caller，则将子协程返回link到调度协程
-// back参数表示协程执行结束后link到的位置(主协程or调度协程)，默认为调度协程
-Fiber::Fiber(std::function<void()> cb, bool back, size_t stacksize)
+// 第三个参数表示协程执行结束后link到的位置(主协程or调度协程)，默认为调度协程
+Fiber::Fiber(std::function<void()> cb, bool is_sched, size_t stacksize)
     : id_ (++s_fiber_id), cb_(cb) {
   ++s_fiber_count;
   stack_size_ = stack_size_? stack_size_: g_fiber_stack_size->get_value();
   stack_ = StackAllocator::alloc(stack_size_);   // 分配协程栈空间
   MOKA_ASSERT_2(!getcontext(&uc_), "getcontext");
-  if (back) {
-    // 调度协程，以主协程为返回路径
+  if (is_sched) {
+    // 当前初始化的协程为调度协程，则以主协程为返回路径
     uc_.uc_link = &(t_main_fiber->uc_);  // 保证子协程函数体执行结束后切换回主协程上下文
   } else {
-    // 任务协程，以调度协程为返回路径，或者以主协程为返回路径
+    // 任务协程，以调度协程为返回路径，或者以主协程为返回路径(用户手动调度的情况)
     if (!Scheduler::GetSchedFiber()) {
       // 不存在调度协程(即用户可以自定义调度)，则主协程就作为任务协程的返回link
       uc_.uc_link = &(t_main_fiber->uc_);
@@ -69,7 +70,7 @@ Fiber::Fiber(std::function<void()> cb, bool back, size_t stacksize)
   uc_.uc_stack.ss_size = stack_size_;
 
   // 子协程发生上下文切换(调度)时调用MainFunc执行
-  makecontext(&uc_, &Fiber::MainFunc, 0);
+  makecontext(&uc_, Fiber::MainFunc, 0);
   MOKA_LOG_DEBUG(g_logger) << "Fiber::Fiber id = " << id_;
 }
 
@@ -130,7 +131,7 @@ void Fiber::sched() {
 void Fiber::yield() {
   // 设置当前执行协程为主协程(即由子协程切换到主协程)
   SetThis(t_main_fiber.get());
-  // 主协程上下文切换到主协程
+  // 当前协程上下文切换到主协程
   MOKA_ASSERT_2(!swapcontext(&uc_, &(t_main_fiber->uc_)), "swapcontext");
 }
 

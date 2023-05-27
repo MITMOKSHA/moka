@@ -12,10 +12,10 @@ class Fiber : public std::enable_shared_from_this<Fiber> {
   using ptr = std::shared_ptr<Fiber>;
   enum state {
     INIT,   // 初始状态
-    HOLD,   // 逃逸状态(不会再被自动加入消息队列)
+    HOLD,   // 逃逸状态(需要显式地将协程加入调度器调度)
     EXEC,   // 执行状态
     TERM,   // 结束状态
-    READY,  // 就绪状态
+    READY,  // 就绪状态(会被调度器自动重新调度)
     EXCEPT  // 异常状态
   };
 
@@ -38,6 +38,7 @@ class Fiber : public std::enable_shared_from_this<Fiber> {
   uint64_t get_fiber_id() { return id_; }
   state get_state() const { return state_; }
   void set_state(state st) { state_ = st; }
+  std::function<void()>& get_cb() {return cb_;}
  
   static void SetThis(Fiber* f);  // 设置当前协程(用线程局部变量标记)
   static Fiber::ptr GetThis();    // 获取当前执行的协程，如果不存在则新建一个协程作为主协程
@@ -52,7 +53,7 @@ class Fiber : public std::enable_shared_from_this<Fiber> {
   static void YieldToHoldSched();
 
   static uint64_t GetFiberCounts();
-  static void MainFunc();              // 发生上下文切换时调用的函数(内部调用回调函数)
+  static void MainFunc();  // 发生上下文切换时调用的函数(内部调用回调函数)
   static uint64_t GetFiberId();        // 获取当前协程的id
 
  private:
