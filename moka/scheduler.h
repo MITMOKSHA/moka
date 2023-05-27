@@ -5,7 +5,7 @@
 #include <list>
 #include <vector>
 #include <functional>
-#include <atomic>  // 保证线程安全
+#include <atomic>     // 保证线程安全
 
 #include "fiber.h"
 #include "thread.h"
@@ -33,14 +33,14 @@ class Scheduler {
   void call();
 
   template<class FiberOrCb>
-  void schedule(FiberOrCb fc, int thread = - 1) {
+  void schedule(FiberOrCb fc, int thread = -1) {
     bool need_notify = false;
     {
       Mutex::LockGuard lock(mutex_);
       need_notify = scheduleNoLock(fc, thread);
     }
     if (need_notify) {
-      notify();  // 通知调度协程
+      notify();  // 通知线程处理任务
     }
   }
 
@@ -69,9 +69,8 @@ class Scheduler {
   virtual void idle();     // 协程idle
 
   void run();              // 调度协程执行的函数
-  void set_this();
+  void set_this();         // 设置当前的调度器标记
   bool hasIdleThreads() { return idle_thread_nums_ > 0; }
-  
 
  private:
   // 无锁版本，使用FiberOrCb模板参数将函数和协程统一起来，构造任务时会调用对应的调度器构造函数

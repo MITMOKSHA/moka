@@ -2,6 +2,7 @@
 #include "fiber.h"
 #include "thread.h"
 #include "macro.h"
+#include "hook.h"
 #include "log.h"
 
 namespace moka {
@@ -35,7 +36,7 @@ Scheduler::Scheduler(size_t threads, bool use_caller, const std::string& name) :
     // 更新当前线程的调度器
     t_scheduler = this;
 
-    // 初始化子调度协程(会调用run函数进行任务调度)，bind绑定到function对象
+    // 初始化子调度协程(会调用run函数进行任务调度，因此需要分配栈空间)，bind绑定到function对象
     // true表示当前调度协程执行结束后link到主协程执行
     caller_sched_fiber_.reset(new Fiber(std::bind(&Scheduler::run, this), true));
 
@@ -59,7 +60,7 @@ Scheduler::Scheduler(size_t threads, bool use_caller, const std::string& name) :
 Scheduler::~Scheduler() {
   MOKA_ASSERT(is_stopping_);
   if (GetThis() == this) {
-    // 清空当前线程的调度器
+    // 清空当前的调度器标记
     t_scheduler = nullptr;  
   }
 }
@@ -76,9 +77,10 @@ void Scheduler::start() {
     // 刚开始启动时线程池为空
     MOKA_ASSERT(thread_pool_.empty());
 
+    // 预留线程池空间
     thread_pool_.resize(thread_nums_);
     for (size_t i = 0; i < thread_nums_; ++i) {
-      // 初始化线程池中的线程，新建的线程在run中启动，并指定线程名称
+      // 初始化线程池中的线程，新建的线程会执行run函数，并指定线程名称
       thread_pool_[i].reset(new Thread(std::bind(&Scheduler::run, this),
                             name_ + "_" + std::to_string(i)));
       thread_id_set_.push_back(thread_pool_[i]->get_id());
@@ -91,8 +93,7 @@ void Scheduler::stop() {
   if (caller_sched_fiber_ && thread_nums_ == 0 
                   && (caller_sched_fiber_->get_state() == Fiber::INIT
                   || caller_sched_fiber_->get_state() == Fiber::TERM)) {
-    // 针对单一caller线程的停止
-    // 使用caller线程作为调度线程
+    // 针对单一caller线程作为调度线程的停止
     is_stopping_ = true;
     
     if (stopping()) {
@@ -101,7 +102,7 @@ void Scheduler::stop() {
     }
   }
 
-  // 保证只能由caller线程执行stop()
+  // 如果use_caller，保证由caller线程执行stop()
   if (thread_id_ != -1) {
     // caller线程
     MOKA_ASSERT(GetThis() == this);
@@ -116,7 +117,6 @@ void Scheduler::stop() {
   // 若当前线程的调度器存在调度协程(使用caller线程作为调度线程)
   if (caller_sched_fiber_) {
     caller_sched_fiber_->sched();  // 当前运行start函数的上下文为主协程
-    // MOKA_LOG_DEBUG(g_logger) << "call out " << caller_sched_fiber_->get_state();
   }
 
   // 等待其他调度线程的调度协程退出调度
@@ -130,24 +130,30 @@ void Scheduler::stop() {
     notify();
   }
 
-  // 这里一定要join等待执行调度线程执行任务结束后再stop结束
+  // 这里一定要join等待调度线程执行任务结束后调度器才停止
   for (auto& i : thread_pool_) {
     i->join();
   }
+  // 清空线程id集合
+  thread_id_set_.clear();
 }
 
 void Scheduler::run() {
   MOKA_LOG_INFO(g_logger) << "run";
+  // 默认情况下，协程调度器的调度线程会开启hook
+  // set_hook_enable(true);
 
   // 设置当前运行的调度器
   set_this();
 
   // 保证run的上下文为调度协程
+  // 若没有使用caller线程作为调度器的调度线程，则其他新建的线程的id肯定不等于调度线程的id
   if (moka::GetThreadId() != this->thread_id_) {
-    // 若没有使用caller线程(调度器的thread_id为-1)，则新建主协程作为调度协程
-    // 若使用了caller线程作为调度器的调度线程，则其他新建的线程的id肯定不等于调度线程的id
+    // 没有使用caller线程作为调度线程
+    // 新建主协程作为调度协程(不需要栈资源，因为run由新建的线程来执行)
 
     // 新建的线程run起来的时候还没有创建协程，因此GetThis返回的是新建的主协程
+    // 调用主协程的构造函数，会SetThis一下，设置当前协程为该新建的协程
     t_sched_fiber = Fiber::GetThis().get();
   }
 
@@ -155,10 +161,12 @@ void Scheduler::run() {
   // idle协程默认返回到调度协程
   Fiber::ptr idle_fiber(new Fiber(std::bind(&Scheduler::idle, this)));
   
-  // 用于执行回调函数的协程
+  // 用于执行回调函数的协程(可以使用reset成员函数重复利用)
   Fiber::ptr cb_fiber;
+  // 用于暂存任务协程的协程载体
+  Fiber::ptr temp_fiber;
 
-  ScheduleTask task;
+  ScheduleTask task;         // 任务结构体，用于暂存任务队列中的任务
   while (true) {
     task.reset();            // 初始化任务为空(协程，回调函数函数，调度线程为空)
     bool notify_me = false;  // 是否notify其他线程进行任务调度
@@ -169,10 +177,10 @@ void Scheduler::run() {
       // 遍历任务队列
       while (it != tasks_.end()) {
         if (it->thread_id != -1 && it->thread_id != moka::GetThreadId()) {
-          // 若当前执行的线程不等于任务协程的调度线程，则不处理这个任务
+          // 若该任务有调度线程，当前执行的线程不等于任务的调度线程，则不处理这个任务
           // 保证协程处理单个线程内的任务
           ++it;
-          notify_me = true;  // 唤醒其他线程来处理这个任务(Run)
+          notify_me = true;  // 唤醒处于idle状态的该任务的调度线程来处理这个任务(Run)
           continue;
         }
         MOKA_ASSERT(it->fiber || it->cb);
@@ -192,37 +200,43 @@ void Scheduler::run() {
       notify();  // 唤醒其他线程处理任务
     }
 
+
     if (task.fiber && task.fiber->get_state() != Fiber::TERM
                    && task.fiber->get_state() != Fiber::EXCEPT) {
+      temp_fiber.reset(new Fiber(task.fiber->get_cb()));
+      // 清空任务结构体数据
+      task.fiber.reset();
       // 协程
-      task.fiber->call();  // 调度执行该子协程(当前协程上下文为调度协程)
+      temp_fiber->call();  // 调度执行该任务协程的函数(当前协程上下文为调度协程)
       --active_thread_nums_;
 
-      if (task.fiber->get_state() == Fiber::READY) {
+      if (temp_fiber->get_state() == Fiber::READY) {
         // 若该协程执行了YeildToReady(说明该任务没有执行完)，则再次将该协程加入任务队列进行调度
-        schedule(task.fiber);
-      } else if (task.fiber->get_state() != Fiber::TERM
-              && task.fiber->get_state() != Fiber::EXCEPT) {
+        // READY状态下自动调度
+        schedule(temp_fiber);
+      } else if (temp_fiber->get_state() != Fiber::TERM
+              && temp_fiber->get_state() != Fiber::EXCEPT) {
         // 让出执行的状态就是hold状态
-        task.fiber->set_state(Fiber::HOLD);
+        temp_fiber->set_state(Fiber::HOLD);
       }
-      task.reset();
     } else if (task.cb) {
-      // 回调方法
-      // 初始化用于执行回调方法的cb协程
+      // 将函数协程作为执行函数的载体
       if (cb_fiber) {
-        // 调用Fiber::reset，重复利用之前的协程栈资源
+        // 调用Fiber::reset，重复利用之前的协程资源
         cb_fiber->reset(task.cb);
       } else {
+        // 第一次使用，则初始化
         cb_fiber.reset(new Fiber(task.cb));
       }
-      // 按值传参后需要reset一下将引用计数减1
+      // 每次任务处理结束就重置任务结构体
       task.reset();
 
+      // 执行该函数任务
       cb_fiber->call();
       --active_thread_nums_;
 
       if (cb_fiber->get_state() == Fiber::READY) {
+        // 自动重新调度
         schedule(cb_fiber);
         // 按值传参后需要reset一下将引用计数减1
         cb_fiber.reset();  // 释放协程(调用析构函数)
@@ -276,7 +290,7 @@ bool Scheduler::stopping() {
 
 void Scheduler::idle() {
   MOKA_LOG_INFO(g_logger) << "idle";
-  // TODO:需要在I/O协程调度模块进行完善(只有在调度器停止时idle才结束，没有任务时idle也不结束)
+  // 需要在I/O协程调度模块进行完善(只有在调度器停止时idle才结束，没有任务时idle也不结束)
   while (!stopping()) {
     // 忙等待
     // 这里将idle协程的状态改为了hold，并从当前协程的上下文切换到调度协程的上下文
