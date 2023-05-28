@@ -31,14 +31,14 @@ class IOManager: public Scheduler, public TimerManager {
       Fiber::ptr fiber;            // 事件协程
       std::function<void()> cb;    // 事件回调函数
     };
-    EventContext& get_context(Event event); // 获取对应的事件上下文对象
+    EventContext& get_context(Event event); // 根据宏获取fd上下文对应的事件上下文对象
     void resetContext(EventContext& ctx);   // 重置事件上下文
-    void trigger(Event event);              // 触发事件
+    void trigger(Event event);              // 触发(调度执行)fd上下文中的读写事件的回调函数/任务协程
 
     int fd = 0;           // 事件关联的文件描述符
-    EventContext read;    // 读事件
-    EventContext write;   // 写事件
-    Event events = NONE;  // 已注册的事件
+    EventContext read;    // 读事件上下文
+    EventContext write;   // 写事件上下文
+    Event events = NONE;  // 当前文件描述符注册的掩码集合(epoll监听事件的集合)
     Mutex mutex;          // 互斥锁
   };
 
@@ -47,20 +47,21 @@ class IOManager: public Scheduler, public TimerManager {
   ~IOManager();
   // 0 success, -1 eeror
   int addEvent(int fd, Event event, std::function<void()> cb);  // 增加回调事件
-  bool delEvent(int fd, Event event);                           // 删除回调事件
-  bool cancelEvent(int fd, Event event);                        // 找到fd上对应的事件强制触发执行
-  bool cancelAll(int fd);                                       // 强制触发fd上的所有事件
+  int delEvent(int fd, Event event);                            // 删除回调事件
+  int cancelEvent(int fd, Event event);                         // 找到fd上对应的事件强制触发执行
+  int cancelAll(int fd);                                        // 强制触发fd上的所有事件
 
-  static IOManager* GetThis();                // 获取当前IOManager
+  static IOManager* GetThis();                                  // 获取当前IO协程调度器
 
  protected:
   virtual void notify() override; 
   virtual bool stopping() override;
   virtual void idle() override;
-  virtual void onTimerInsertedAtFront() override;
+  // 用于有更早超时的定期器插入到定时器堆中，这时候需要通知对epoll的超时时间进行调整
+  virtual void onTimerInsertedAtFront() override; 
 
-  void contextResize(size_t size);
-  bool stopping(uint64_t& timeout);
+  void contextResize(size_t size);                  // 对fd上下文数组扩容
+  bool stopping(uint64_t& timeout);                 // IO调度器判断停止的条件
 
  private:
   int epfd_ = 0;
