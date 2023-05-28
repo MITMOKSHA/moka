@@ -163,8 +163,6 @@ void Scheduler::run() {
   
   // 用于执行回调函数的协程(可以使用reset成员函数重复利用)
   Fiber::ptr cb_fiber;
-  // 用于暂存任务协程的协程载体
-  Fiber::ptr temp_fiber;
 
   ScheduleTask task;         // 任务结构体，用于暂存任务队列中的任务
   while (true) {
@@ -203,22 +201,21 @@ void Scheduler::run() {
 
     if (task.fiber && task.fiber->get_state() != Fiber::TERM
                    && task.fiber->get_state() != Fiber::EXCEPT) {
-      temp_fiber.reset(new Fiber(task.fiber->get_cb()));
-      // 清空任务结构体数据
-      task.fiber.reset();
+      task.fiber->reset(task.fiber->get_cb());
       // 协程
-      temp_fiber->call();  // 调度执行该任务协程的函数(当前协程上下文为调度协程)
+      task.fiber->call();  // 调度执行该任务协程的函数(当前协程上下文为调度协程)
       --active_thread_nums_;
 
-      if (temp_fiber->get_state() == Fiber::READY) {
+      if (task.fiber->get_state() == Fiber::READY) {
         // 若该协程执行了YeildToReady(说明该任务没有执行完)，则再次将该协程加入任务队列进行调度
         // READY状态下自动调度
-        schedule(temp_fiber);
-      } else if (temp_fiber->get_state() != Fiber::TERM
-              && temp_fiber->get_state() != Fiber::EXCEPT) {
+        schedule(task.fiber);
+      } else if (task.fiber->get_state() != Fiber::TERM
+              && task.fiber->get_state() != Fiber::EXCEPT) {
         // 让出执行的状态就是hold状态
-        temp_fiber->set_state(Fiber::HOLD);
+        task.fiber->set_state(Fiber::HOLD);
       }
+      task.reset();
     } else if (task.cb) {
       // 将函数协程作为执行函数的载体
       if (cb_fiber) {
