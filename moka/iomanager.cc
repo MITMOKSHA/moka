@@ -403,7 +403,9 @@ void IOManager::idle() {
     // 让出执行权给scheduler
     // 直接回到run事件循环中，在事件循环中被设置为HOLD状态(进入idle时还会被调度)
     Fiber::ptr cur = Fiber::GetThis();
-    cur->back();
+    Fiber* row = cur.get();
+    cur.reset();
+    row->back();
   }
 }
 
