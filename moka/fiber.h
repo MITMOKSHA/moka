@@ -22,10 +22,10 @@ class Fiber : public std::enable_shared_from_this<Fiber> {
  private:
   Fiber();  // 用于创建主协程(不需要栈空间)
  public:
-  Fiber(std::function<void()> cb, bool back = false, size_t stacksize = 0);  // 用于创建子协程
+  Fiber(std::function<void()> cb, bool link_to_main_fiber = false, size_t stacksize = 0);  // 用于创建子协程
   ~Fiber();
 
-  void reset(std::function<void()> cb, bool is_sched = false);  // 重置协程状态(在INIT，TERM状态时重置)
+  void reset(std::function<void()> cb, bool link_to_main_fiber = false);  // 重置协程状态(在INIT，TERM状态时重置)
 
   // 当前上下文为主协程的上下文
   void sched();                             // 调度子协程执行
@@ -53,7 +53,8 @@ class Fiber : public std::enable_shared_from_this<Fiber> {
   static void YieldToHoldSched();
 
   static uint64_t GetFiberCounts();
-  static void MainFunc();  // 发生上下文切换时调用的函数(内部调用回调函数)
+  static void MainFunc();          // 发生上下文切换时调用的函数(内部调用回调函数)，执行完之后返回主协程
+  static void MainFuncSched();     // 执行完之后返回调度协程
   static uint64_t GetFiberId();        // 获取当前协程的id
 
  private:

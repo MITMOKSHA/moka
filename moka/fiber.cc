@@ -48,29 +48,21 @@ Fiber::Fiber() {
 // 初始化任务协程/调度协程
 // 若使用caller，则将子协程返回link到调度协程
 // 第三个参数表示协程执行结束后link到的位置(主协程or调度协程)，默认为调度协程
-Fiber::Fiber(std::function<void()> cb, bool is_sched, size_t stacksize)
+Fiber::Fiber(std::function<void()> cb, bool link_to_main_fiber, size_t stacksize)
     : id_ (++s_fiber_id), cb_(cb) {
   ++s_fiber_count;
   stack_size_ = stack_size_? stack_size_: g_fiber_stack_size->get_value();
   stack_ = StackAllocator::alloc(stack_size_);   // 分配协程栈空间
   MOKA_ASSERT_2(!getcontext(&uc_), "getcontext");
-  if (is_sched) {
-    // 当前初始化的协程为调度协程，则以主协程为返回路径
-    uc_.uc_link = &(t_main_fiber->uc_);  // 保证子协程函数体执行结束后切换回主协程上下文
-  } else {
-    // 任务协程，以调度协程为返回路径，或者以主协程为返回路径(用户手动调度的情况)
-    if (!Scheduler::GetSchedFiber()) {
-      // 不存在调度协程(即用户可以自定义调度)，则主协程就作为任务协程的返回link
-      uc_.uc_link = &(t_main_fiber->uc_);
-    } else {
-      uc_.uc_link = &(Scheduler::GetSchedFiber()->uc_);
-    }
-  }
   uc_.uc_stack.ss_sp = stack_;
   uc_.uc_stack.ss_size = stack_size_;
 
   // 子协程发生上下文切换(调度)时调用MainFunc执行
-  makecontext(&uc_, Fiber::MainFunc, 0);
+  if (link_to_main_fiber) {
+    makecontext(&uc_, Fiber::MainFunc, 0);
+  } else {
+    makecontext(&uc_, &Fiber::MainFuncSched, 0);
+  }
   MOKA_LOG_DEBUG(g_logger) << "Fiber::Fiber id = " << id_;
 }
 
@@ -95,26 +87,21 @@ Fiber::~Fiber() {
 }
 
 // 回收协程的栈资源(重复利用)，使用该栈资源和传入的参数初始化新的协程
-void Fiber::reset(std::function<void()> cb, bool back) {
+void Fiber::reset(std::function<void()> cb, bool link_to_main_fiber) {
   MOKA_ASSERT(stack_);
   // 若当前协程处于以下几种状态即可回收资源
   MOKA_ASSERT(state_ == TERM || state_ == INIT || state_ == EXCEPT);
   // 回收资源
   cb_ = cb;
   MOKA_ASSERT_2(!getcontext(&uc_), "getcontext");
-  if (back) {
-    uc_.uc_link = &(t_main_fiber->uc_);
-  } else {
-    if (!Scheduler::GetSchedFiber()) {
-      uc_.uc_link = &(t_main_fiber->uc_);
-    } else {
-      uc_.uc_link = &(Scheduler::GetSchedFiber()->uc_);
-    }
-  }
   // 使用当前协程的栈资源
   uc_.uc_stack.ss_sp = stack_;        
   uc_.uc_stack.ss_size = stack_size_;
-  makecontext(&uc_, &Fiber::MainFunc, 0);  // 设置当发生上下文切换时调用MainFunc(调用回调函数)
+  if (link_to_main_fiber) {
+    makecontext(&uc_, &Fiber::MainFunc, 0);  // 设置当发生上下文切换时调用MainFunc(调用回调函数)
+  } else {
+    makecontext(&uc_, &Fiber::MainFuncSched, 0);
+  }
   state_ = INIT;
 }
 
@@ -215,6 +202,36 @@ void Fiber::MainFunc() {
         << std::endl
         << moka::BacktraceToString();
   }
+  // 防止智能指针引用计数增加
+  moka::Fiber* row = cur.get();
+  // 释放该智能指针
+  cur.reset();
+  row->yield();
+}
+
+void Fiber::MainFuncSched() {
+  Fiber::ptr cur = GetThis();
+  MOKA_ASSERT(cur);
+  try {
+    cur->cb_();
+    cur->cb_ = nullptr;
+    cur->state_ = TERM;  // 执行结束后协程状态置为TERM
+  } catch (std::exception& ex) {
+    cur->state_ = EXCEPT;
+    MOKA_LOG_ERROR(g_logger) << "Fiber Exception: " << ex.what()
+        << " fiber_id = " << cur->get_fiber_id()
+        << std::endl
+        << moka::BacktraceToString();
+  } catch (...) {
+    cur->state_ = EXCEPT;
+    MOKA_LOG_ERROR(g_logger) << "Fiber Exception"
+        << " fiber_id = " << cur->get_fiber_id()
+        << std::endl
+        << moka::BacktraceToString();
+  }
+  moka::Fiber* row = cur.get();
+  cur.reset();
+  row->back();
 }
 
 uint64_t Fiber::GetFiberId() {

@@ -18,9 +18,9 @@ void test_fiber() {
   {
     moka::Fiber::GetThis();  // 初始化当前线程的主协程
     MOKA_LOG_INFO(g_logger) << "main begin";
-    moka::Fiber::ptr fiber(new moka::Fiber(run_in_fiber));  // 新建子协程
+    moka::Fiber::ptr fiber(new moka::Fiber(run_in_fiber, true));  // 新建子协程
     MOKA_ASSERT(moka::Fiber::GetFiberCounts() == 2);
-    fiber->reset(run_in_fiber);  // 测试回收资源的方法
+    fiber->reset(run_in_fiber, true);  // 测试回收资源的方法
     // 只是资源被重新利用了
     MOKA_ASSERT(moka::Fiber::GetFiberCounts() == 2);
     fiber->sched();  // 调度执行当前子协程
