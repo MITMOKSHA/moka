@@ -141,7 +141,7 @@ void Scheduler::stop() {
 void Scheduler::run() {
   MOKA_LOG_INFO(g_logger) << "run";
   // 默认情况下，协程调度器的调度线程会开启hook
-  // set_hook_enable(true);
+  set_hook_enable(true);
 
   // 设置当前运行的调度器
   set_this();
@@ -201,7 +201,6 @@ void Scheduler::run() {
 
     if (task.fiber && task.fiber->get_state() != Fiber::TERM
                    && task.fiber->get_state() != Fiber::EXCEPT) {
-      task.fiber->reset(task.fiber->get_cb());
       // 协程
       task.fiber->call();  // 调度执行该任务协程的函数(当前协程上下文为调度协程)
       --active_thread_nums_;

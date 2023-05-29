@@ -8,7 +8,8 @@ moka::Logger::ptr g_logger = MOKA_LOG_ROOT();
 void test_fiber() {
   MOKA_LOG_INFO(g_logger) << "test in fiber and counts=" << moka::Fiber::GetFiberCounts();
   static int s_count = 3;
-  sleep(1);
+  // 这一块hook之后就不支持嵌套加锁了
+  // sleep(1);
   if (--s_count >= 0) {
     // moka::Scheduler::GetThis()->schedule(test_fiber, moka::GetThreadId());  // 指定线程执行
     moka::Scheduler::GetThis()->schedule(test_fiber);

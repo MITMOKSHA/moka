@@ -56,6 +56,7 @@ IOManager::~IOManager() {
 }
 
 // 0 success, -1 error
+// 没有第三个参数，则表示添加的事件对应的任务，为当前协程(而不是函数)，并放入事件上下文
 int IOManager::addEvent(int fd, Event event, std::function<void()> cb) {
   // 将文件描述符对应的事件加入到epoll内核事件表中(通过自定义的fd上下文，指针存储在data联合体中)
   RWmutex::ReadLock lock(mutex_);

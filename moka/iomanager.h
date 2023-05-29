@@ -46,7 +46,7 @@ class IOManager: public Scheduler, public TimerManager {
   IOManager(size_t thread_nums = 1, bool use_caller = true, const std::string& name = "");
   ~IOManager();
   // 0 success, -1 eeror
-  int addEvent(int fd, Event event, std::function<void()> cb);  // 增加回调事件
+  int addEvent(int fd, Event event, std::function<void()> cb = nullptr);  // 增加回调事件
   int delEvent(int fd, Event event);                            // 删除回调事件
   int cancelEvent(int fd, Event event);                         // 找到fd上对应的事件强制触发执行
   int cancelAll(int fd);                                        // 强制触发fd上的所有事件
