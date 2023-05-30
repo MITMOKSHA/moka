@@ -8,10 +8,12 @@
 #include <mutex>
 #include <stdint.h>
 
+#include "noncopyable.h"
+
 namespace moka {
 
 // 信号量
-class Semaphore {
+class Semaphore : public Noncopyable {
  public:
   Semaphore(uint32_t num = 0);
   ~Semaphore();
@@ -60,7 +62,7 @@ class ScopedLock {
   bool is_locked = false;
 };
 
-class Mutex {
+class Mutex : public Noncopyable {
  public:
   using LockGuard = ScopedLock<Mutex>;
   Mutex() {
@@ -83,7 +85,7 @@ class Mutex {
 };
 
 // 空锁(测试日志线程安全)
-class NullMutex {
+class NullMutex : public Noncopyable {
  public:
   using LockGuard = ScopedLock<NullMutex>; 
   NullMutex() {}
@@ -157,7 +159,7 @@ class WriteScopedLock {
 
 
 // 读写锁
-class RWmutex {
+class RWmutex : public Noncopyable {
  public:
   using ReadLock = ReadScopedLock<RWmutex>;
   using WriteLock = WriteScopedLock<RWmutex>;
@@ -184,7 +186,7 @@ class RWmutex {
   pthread_rwlock_t lock_;
 };
 
-class Spinlock {
+class Spinlock : public Noncopyable {
  public:
   using LockGuard = ScopedLock<Spinlock>;
   Spinlock() {
