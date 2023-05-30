@@ -143,7 +143,6 @@ static void OnTimer(std::weak_ptr<void> weak_cond, std::function<void()> cb) {
 Timer::ptr TimerManager::addConditionalTimer(uint64_t interval, std::function<void()> cb,
                                              std::weak_ptr<void> weak_cond,
                                              bool recur) {
-  RWmutex::WriteLock lock(mutex_);
   return addTimer(interval, std::bind(&OnTimer, weak_cond, cb), recur);
 }
 
