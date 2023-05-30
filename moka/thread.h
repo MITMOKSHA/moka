@@ -40,8 +40,7 @@ class ScopedLock {
   }
 
   ~ScopedLock() {
-    mutex_.unlock();
-    is_locked = false;
+    unlock();
   }
 
   void lock() {
@@ -104,8 +103,8 @@ class ReadScopedLock {
   }
 
   ~ReadScopedLock() {
-    mutex_.unlock();
-    is_locked = false;
+    // 调用自身版本的unlock，保证在没有加锁的时候不进行unlock()
+    unlock();
   }
 
   void lock() {
@@ -136,7 +135,7 @@ class WriteScopedLock {
   }
 
   ~WriteScopedLock() {
-    mutex_.unlock();
+    unlock();
   }
 
   void lock() {
