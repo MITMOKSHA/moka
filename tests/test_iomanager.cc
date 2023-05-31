@@ -18,7 +18,8 @@ void func() {
   bzero(&addr, sizeof(addr));
   addr.sin_family = AF_INET;
   addr.sin_port = htons(80);
-  inet_pton(AF_INET, "172.30.9.91", &addr.sin_addr.s_addr);
+  // 连接百度服务器
+  inet_pton(AF_INET, "110.242.68.3", &addr.sin_addr.s_addr);
   
   // 这里会出现Operation now in progress(因为sockfd设置为非阻塞，connect实际上已经连接)
   connect(sockfd, (sockaddr*)&addr, sizeof(addr));
@@ -28,9 +29,6 @@ void func() {
   // 如果sockfd触发读事件，调度执行回调函数
   moka::IOManager::GetThis()->addEvent(sockfd, moka::IOManager::READ, [=](){
     MOKA_LOG_INFO(g_logger) << "read callback";
-    // 此时执行addEvent回调函数时，sockfd的读事件已经被移除了
-    // 因此使用cancelEvent触发读事件就会返回false
-    MOKA_ASSERT(moka::IOManager::GetThis()->cancelEvent(sockfd, moka::IOManager::READ) == -1);
   });
 
   // 如果sockfd触发写事件，调度执行回调函数
@@ -38,11 +36,10 @@ void func() {
     MOKA_LOG_INFO(g_logger) << "write callback";
     // WRITE事件已经执行起来了，这时候删除事件会报错，因为事件已经在trigger的时候从注册的事件集合中删除了
     MOKA_ASSERT(moka::IOManager::GetThis()->delEvent(sockfd, moka::IOManager::WRITE) == -1);
-    // 主动关闭之后，epoll内核事件表中注册的fd相关的事件也会从事件队列中删除
-    close(sockfd);   // 释放文件描述符资源
+
+    MOKA_ASSERT(moka::IOManager::GetThis()->cancelEvent(sockfd, moka::IOManager::READ) == 0);
+    close(sockfd);
   });
-  // 这时候如果在这里调用close就会一直在epoll_wait状态阻塞(因为addEvent增加了pending的数量)
-  // close(sockfd);
 }
 
 // 这里定义一个全局的定时器，否则在定时器未返回时在lambda表达式中使用会出现问题
@@ -82,7 +79,7 @@ void test_IOManager() {
 }
 
 int main(int argc, char** argv) {
-  // test_IOManager();
-  test_timer();
+  test_IOManager();
+  // test_timer();
   return 0;
 }
