@@ -20,38 +20,49 @@ set(LIB_SRC                             # 设置变量
   moka/scheduler.cc
   moka/iomanager.cc
   moka/timer.cc
+  moka/hook.cc
+  moka/fd_manager.cc
 )
+
+set(LIBS 
+        moka
+        dl
+        ${YAMLCPP})
 
 add_library(moka SHARED ${LIB_SRC})     # 添加名为libmoka.so的动态库，再指定生成库的源文件
 
 # 添加测试文件
 add_executable(test tests/test.cc)      # 添加可执行文件，test作为可执行文件的名称
 add_dependencies(test moka)             # 使test依赖于moka(即moka改变，test就要重新编译)
-target_link_libraries(test moka ${YAMLCPP})
+target_link_libraries(test ${LIBS})
 
 add_executable(test_config tests/test_config.cc)
 add_dependencies(test_config moka)            
-target_link_libraries(test_config moka ${YAMLCPP})
+target_link_libraries(test_config ${LIBS})
 
 add_executable(test_thread tests/test_thread.cc)  
 add_dependencies(test_thread moka)             
-target_link_libraries(test_thread moka ${YAMLCPP})
+target_link_libraries(test_thread ${LIBS})
 
 add_executable(test_util tests/test_util.cc)     
 add_dependencies(test_util moka)             
-target_link_libraries(test_util moka ${YAMLCPP})
+target_link_libraries(test_util ${LIBS})
 
 add_executable(test_fiber tests/test_fiber.cc)     
 add_dependencies(test_fiber moka)             
-target_link_libraries(test_fiber moka ${YAMLCPP})
+target_link_libraries(test_fiber ${LIBS})
 
 add_executable(test_scheduler tests/test_scheduler.cc)     
 add_dependencies(test_scheduler moka)             
-target_link_libraries(test_scheduler moka ${YAMLCPP})
+target_link_libraries(test_scheduler ${LIBS})
 
 add_executable(test_iomanager tests/test_iomanager.cc)     
 add_dependencies(test_iomanager moka)             
-target_link_libraries(test_iomanager moka ${YAMLCPP})
+target_link_libraries(test_iomanager ${LIBS})
+
+add_executable(test_hook tests/test_hook.cc)     
+add_dependencies(test_hook moka)             
+target_link_libraries(test_hook ${LIBS})
 
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)  # 设置可执行文件的生成位置，这里设置为bin目录下
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)     # 设置库文件的生成位置(方便去找)
