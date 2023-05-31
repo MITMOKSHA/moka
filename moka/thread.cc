@@ -58,7 +58,7 @@ Thread::Thread(std::function<void()> cb, const std::string& name)
                              << " name=" << name;
     throw std::logic_error("pthread_create error");
   }
-   sem_.wait();   // 等待线程运行run起来才结束构造函数
+   sem_.wait();   // 保证线程类构造函数运行结束时，执行的函数已经运行起来。
 }
 
 Thread::~Thread() {
