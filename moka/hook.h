@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <stdint.h>
 
 namespace moka {
   bool is_hook_enbale();
@@ -70,6 +71,7 @@ extern fcntl_fun fcntl_f;
 extern ioctl_fun ioctl_f;
 extern getsockopt_fun getsockopt_f;
 extern setsockopt_fun setsockopt_f;
+extern int connect_with_timeout(int sockfd, const struct sockaddr* addr, socklen_t addrlen, uint64_t timeout_ms);
 }
 
 #endif

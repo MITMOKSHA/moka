@@ -23,6 +23,7 @@ set(LIB_SRC                             # 设置变量
   moka/hook.cc
   moka/fd_manager.cc
   moka/address.cc
+  moka/socket.cc
 )
 
 set(LIBS 
@@ -68,6 +69,10 @@ target_link_libraries(test_hook ${LIBS})
 add_executable(test_address tests/test_address.cc)     
 add_dependencies(test_address moka)             
 target_link_libraries(test_address ${LIBS})
+
+add_executable(test_socket tests/test_socket.cc)     
+add_dependencies(test_socket moka)             
+target_link_libraries(test_socket ${LIBS})
 
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)  # 设置可执行文件的生成位置，这里设置为bin目录下
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)     # 设置库文件的生成位置(方便去找)

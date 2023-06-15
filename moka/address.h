@@ -10,11 +10,14 @@
 #include <vector>
 #include <map>
 
-#define CREATE_IPV4(addr, prefix) \
-  moka::IPv4Address::ptr(new moka::IPv4Address(addr, prefix));
+#define CREATE_IPV4(addr_str, prefix) \
+  moka::IPv4Address::ptr(new moka::IPv4Address(addr_str, prefix));
 
-#define CREATE_IPV6(addr, prefix) \
-  moka::IPv6Address::ptr(new moka::IPv6Address(addr, prefix));
+#define CREATE_IPV6(addr_str, prefix) \
+  moka::IPv6Address::ptr(new moka::IPv6Address(addr_str, prefix));
+
+#define LOOKUP_IPV4_ADDR(domain, port) \
+  moka::IPAddress::LookupIPv4Addr(domain, port);
 
 namespace moka {
 
@@ -26,7 +29,7 @@ class Address {
 
   // 获取网卡和本地回环的IP地址
   static bool GetInterfaceAddress(std::multimap<std::string, Address::ptr>& result);
-  // TODO:获取指定网卡名称的IP地址
+  // 获取指定网卡名称的IP地址
   static bool GetInterfaceAddress(std::vector<Address::ptr>& result, 
       const std::string& iface);
 
@@ -54,8 +57,17 @@ class IPAddress : public Address {
   // 获取子网掩码
   virtual IPAddress::ptr get_netmask(uint32_t prefix_len) = 0;
 
-  // 域名转换为IP地址的通用函数
+  // 域名转换为IP地址的通用函数，获取域名对应的所有ip地址
   static bool DnsToIPAddr(const char* host, const char* port, std::vector<IPAddress::ptr>& addrs);
+  static moka::IPAddress::ptr LookupIPv4Addr(const char* host, const char* port) {
+    std::vector<moka::IPAddress::ptr> addrs;
+    moka::IPAddress::DnsToIPAddr(host, port, addrs);
+    if (addrs.empty()) {
+      // 不存在则返回nullptr
+      return nullptr;
+    }
+    return addrs[0];
+  }
 
 
   virtual uint16_t get_port() const = 0;
@@ -115,6 +127,7 @@ class UnixAddress : public Address {
 
   virtual const sockaddr* get_addr() const override;
   virtual socklen_t get_addrlen() const override;
+  void set_addrlen(socklen_t len) { addr_len_ = len; }
   // 用于序列化输出
   virtual std::ostream& insert(std::ostream& os) const override;
  private:
